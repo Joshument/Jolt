@@ -18,17 +18,17 @@ pub async fn ban(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult 
     let user_id = args.single::<UserId>()?;
     let time_string = args.single::<String>()?;
     let reason = args.rest();
-    println!("{}\n{}", user_id, time_string);
     
     let time = humantime::parse_duration(&time_string)?;
     let now = Timestamp::now();
     let unban_time = Timestamp::from_unix_timestamp(now.unix_timestamp() + time.as_secs() as i64)?;
 
-    let http = &ctx.http;
-    let cache = &ctx.cache;
-
-    let guild = msg.guild(cache).expect("wa");
-    guild.ban(http, user_id, 0).await?;
+    let guild = msg.guild_id.expect("Failed to get guild id!");
+    if reason.len() > 0 {
+        guild.ban_with_reason(&ctx.http, &user_id, 0, reason).await?;
+    } else {
+        guild.ban(&ctx.http, &user_id, 0).await?;
+    }
 
     msg.channel_id.send_message(&ctx.http, |m| {
         m.embed(|e| { e
