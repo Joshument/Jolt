@@ -1,0 +1,1 @@
+`cargo install sqlx-cli`
