@@ -165,7 +165,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     ModerationType::Ban => guild_id.unban(&http, user_id).await
                         .expect(format!("Failed to unban user {} from {}", user_id, guild_id).as_str()),
                     ModerationType::Mute => unimplemented!(),
-                    _ => () // There should be no other timed events
+                    _ => () // Either there is no timed event, or the event has a built-in expiry (timeout)
                 }
             }
         }

@@ -3,8 +3,10 @@ use crate::colors;
 
 use serenity::framework::standard::macros::command;
 use serenity::framework::standard::{Args, CommandResult, CommandError};
+use serenity::http::Http;
 use serenity::model::prelude::*;
 use serenity::prelude::*;
+use serenity::model::{error, permissions};
 
 use humantime;
 
@@ -104,8 +106,9 @@ async fn send_moderation_messages(
     dm_color: u32,
     channel: &ChannelId,
     message: &str,
-    dm_fail_message: &str,
     color: u32,
+    dm_fail_message: &str,
+    dm_fail_color: u32,
     reason: Option<&str>
 ) -> CommandResult {
     let dm_success = dm_channel.send_message(&ctx.http, |m| {
@@ -137,7 +140,7 @@ async fn send_moderation_messages(
     if let Err(_) = dm_success {
         channel.send_message(&ctx.http, |m| {
             m.embed(|e| e
-                .color(0xf38ba8)
+                .color(dm_fail_color)
                 .description(dm_fail_message)
             )
         }).await?;
@@ -172,11 +175,12 @@ pub async fn ban(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
             user_id.as_u64(), 
             expiry_date.unix_timestamp()
         ), 
+        colors::GREEN,
         &format!(
             "I was unable to DM <@{}> about their moderation.", 
             user_id.as_u64()
         ), 
-        colors::GREEN, 
+        colors::RED, 
         reason.as_deref()
     ).await?;
 
@@ -211,11 +215,12 @@ pub async fn kick(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         colors::RED, 
         &msg.channel_id, 
         &format!("User <@{}> has been kicked", user_id.as_u64()), 
+        colors::GREEN,
         &format!(
             "I was unable to DM <@{}> about their moderation.", 
             user_id.as_u64()
         ), 
-        colors::GREEN, 
+        colors::RED, 
         reason.as_deref()
     ).await?;
 
@@ -226,6 +231,75 @@ pub async fn kick(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     } else {
         guild_id.kick(&ctx.http, user_id).await?;
     }
+
+    Ok(())
+}
+
+#[command]
+pub async fn timeout(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
+    let author_permissions = msg.guild(&ctx.cache)
+        .expect("Failed to get guild!")
+        .member_permissions(&ctx.http, msg.author.id).await?;
+
+    if !author_permissions.moderate_members() {
+       return Err(From::from(error::Error::InvalidPermissions(permissions::Permissions::MODERATE_MEMBERS)));
+    }
+
+    let moderation_info = get_timed_moderation_info(msg, args).await?;
+    let guild_id = moderation_info.guild_id;
+    let user_id = moderation_info.user_id;
+    let expiry_date = moderation_info.expiry_date;
+    let reason = moderation_info.reason;
+
+    let dm_channel = user_id.create_dm_channel(&ctx.http).await?;
+
+    // start with the timeout to see if the specified time is over 28d or not
+    let successful_timeout = guild_id
+    .member(&ctx.http, &user_id).await?
+    .disable_communication_until_datetime(&ctx.http, expiry_date).await;
+
+    if let Err(e) = &successful_timeout {
+        match e {
+            SerenityError::Http(_) => {
+                msg.channel_id.send_message(&ctx.http, |m| {
+                    m.embed(|e| e
+                        .color(colors::RED)
+                        .description("Timeouts must be shorter than 28 days.")
+                    )
+                }).await?;
+            }
+            _ => ()
+        }
+
+        // This seems to be the best way to return the error after checking it
+        successful_timeout?
+    }
+
+    send_moderation_messages(
+        ctx, 
+        &dm_channel, 
+        &format!(
+            "You have been timed out in **{}** until <t:{}:F>", 
+            guild_id.name(&ctx.cache).expect("Failed to get guild name!").as_str(), 
+            expiry_date.unix_timestamp()
+        ), 
+        colors::RED, 
+        &msg.channel_id, 
+        &format!(
+            "User <@{}> has been timed out until <t:{}:F>", 
+            user_id.as_u64(), 
+            expiry_date.unix_timestamp()
+        ), 
+        colors::GREEN,
+        &format!(
+            "I was unable to DM <@{}> about their moderation.", 
+            user_id.as_u64()
+        ), 
+        colors::RED, 
+        reason.as_deref()
+    ).await?;
+
+    database::add_temporary_moderation(&ctx.data, guild_id, user_id, ModerationType::Timeout, expiry_date, reason.as_deref()).await?;
 
     Ok(())
 }
