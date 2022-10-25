@@ -3,6 +3,7 @@
 use std::{process::{Command, Output, ExitStatus}, os::unix::process::ExitStatusExt};
 
 fn main() {
+    println!("cargo:rerun-if-changed=.git/refs/heads");
     // get the hash of the current commit using git
     let output = Command::new("git").args(&["rev-parse", "--short", "HEAD"]).output().unwrap_or_else(|_| {
         println!("Failed to get git hash! Make sure that your local copy is controlled with git. Defaulting to 'unknown'");
