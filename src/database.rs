@@ -32,12 +32,40 @@ pub async fn add_temporary_moderation(
     let expiry_date = expiry_date.unix_timestamp();
 
     sqlx::query!(
-        "INSERT INTO timed_moderations (guild_id, user_id, moderation_type, expiry_date, reason) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO moderations (guild_id, user_id, moderation_type, expiry_date, reason, active) VALUES (?, ?, ?, ?, ?, ?)",
         guild_id,
         user_id,
         moderation_type,
         expiry_date,
-        reason
+        reason,
+        true
+    )
+    .execute(&*database)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn add_moderation(
+    data: &Arc<RwLock<TypeMap>>,
+    guild_id: impl Into<GuildId>, 
+    user_id: impl Into<UserId>, 
+    moderation_type: ModerationType,
+    reason: Option<&str>,
+) -> sqlx::Result<()> {
+    let database = get_database(data).await.clone();
+
+    let guild_id = guild_id.into().0 as i64;
+    let user_id = user_id.into().0 as i64;
+    let moderation_type = moderation_type as u8;
+
+    sqlx::query!(
+        "INSERT INTO moderations (guild_id, user_id, moderation_type, reason, active) VALUES (?, ?, ?, ?, ?)",
+        guild_id,
+        user_id,
+        moderation_type,
+        reason,
+        true
     )
     .execute(&*database)
     .await?;

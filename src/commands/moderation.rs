@@ -1,4 +1,5 @@
 use crate::database;
+use crate::colors;
 
 use serenity::framework::standard::macros::command;
 use serenity::framework::standard::{Args, CommandResult, CommandError};
@@ -94,6 +95,57 @@ async fn get_moderation_info(msg: &Message, mut args: Args) -> Result<Moderation
 
     Ok(ModerationInfo { guild_id, user_id, reason: reason })
 }
+
+// This function saves a lot of repeated embeds that would be used in multiple contexts with slightly different values.
+async fn send_moderation_messages(
+    ctx: &Context,
+    dm_channel: &PrivateChannel,
+    dm_message: &str,
+    dm_color: u32,
+    channel: &ChannelId,
+    message: &str,
+    dm_fail_message: &str,
+    color: u32,
+    reason: Option<&str>
+) -> CommandResult {
+    let dm_success = dm_channel.send_message(&ctx.http, |m| {
+        m.embed(|e| { e
+            .color(dm_color)
+            .field("Zap!", dm_message, true);
+    
+            if let Some(reason) = &reason {
+                e.field("Reason:", &reason, false);
+            }
+    
+            e
+        })
+    }).await;
+
+    channel.send_message(&ctx.http, |m| {
+        m.embed(|e| { e
+            .color(color)
+            .field("Zap!", message, true);
+
+            if let Some(reason) = reason {
+                e.field("Reason:", &reason, false);
+            }
+
+            e
+        })
+    }).await?;
+
+    if let Err(_) = dm_success {
+        channel.send_message(&ctx.http, |m| {
+            m.embed(|e| e
+                .color(0xf38ba8)
+                .description(dm_fail_message)
+            )
+        }).await?;
+    }
+
+    Ok(())
+}
+
 #[command]
 #[required_permissions(BAN_MEMBERS)]
 pub async fn ban(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
@@ -105,22 +157,28 @@ pub async fn ban(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 
     let dm_channel = user_id.create_dm_channel(&ctx.http).await?;
 
-    let dm_success = dm_channel.send_message(&ctx.http, |m| {
-        m.embed(|e| { e
-            .color(0xf38ba8)
-            .field("Zap!", format!(
-                "You have been banned from **{}** until <t:{}:F>", 
-                guild_id.name(&ctx.cache).expect("Failed to get guild name!").as_str(), 
-                expiry_date.unix_timestamp()
-            ), true);
-    
-            if let Some(reason) = &reason {
-                e.field("Reason:", &reason, false);
-            }
-    
-            e
-        })
-    }).await;
+    send_moderation_messages(
+        ctx, 
+        &dm_channel, 
+        &format!(
+            "You have been banned from **{}** until <t:{}:F>", 
+            guild_id.name(&ctx.cache).expect("Failed to get guild name!").as_str(), 
+            expiry_date.unix_timestamp()
+        ), 
+        colors::RED, 
+        &msg.channel_id, 
+        &format!(
+            "User <@{}> has been banned until <t:{}:F>", 
+            user_id.as_u64(), 
+            expiry_date.unix_timestamp()
+        ), 
+        &format!(
+            "I was unable to DM <@{}> about their moderation.", 
+            user_id.as_u64()
+        ), 
+        colors::GREEN, 
+        reason.as_deref()
+    ).await?;
 
     database::add_temporary_moderation(&ctx.data, guild_id, user_id, ModerationType::Ban, expiry_date, reason.as_deref()).await?;
 
@@ -128,28 +186,6 @@ pub async fn ban(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         guild_id.ban_with_reason(&ctx.http, &user_id, 0, &reason).await?;
     } else {
         guild_id.ban(&ctx.http, &user_id, 0).await?;
-    }
-
-    msg.channel_id.send_message(&ctx.http, |m| {
-        m.embed(|e| { e
-            .color(0xa6e3a1)
-            .field("Zap!", format!("User <@{}> has been banned until <t:{}:F>", user_id.as_u64(), expiry_date.unix_timestamp()), true);
-
-            if let Some(reason) = reason {
-                e.field("Reason:", &reason, false);
-            }
-
-            e
-        })
-    }).await?;
-
-    if let Err(_) = dm_success {
-        msg.channel_id.send_message(&ctx.http, |m| {
-            m.embed(|e| e
-                .color(0xf38ba8)
-                .description(format!("I was unable to DM <@{}> about their moderation.", user_id.as_u64()))
-            )
-        }).await?;
     }
 
     Ok(())
@@ -165,49 +201,30 @@ pub async fn kick(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 
     let dm_channel = user_id.create_dm_channel(&ctx.http).await?;
 
-    let dm_success = dm_channel.send_message(&ctx.http, |m| {
-        m.embed(|e| { e
-            .color(0xf38ba8)
-            .field("Zap!", format!(
-                "You have been kicked from **{}**!", 
-                guild_id.name(&ctx.cache).expect("Failed to get guild name!").as_str(),
-            ), true);
-    
-            if let Some(reason) = &reason {
-                e.field("Reason:", &reason, false);
-            }
-    
-            e
-        })
-    }).await;
+    send_moderation_messages(
+        ctx, 
+        &dm_channel, 
+        &format!(
+            "You have been kicked from **{}**!", 
+            guild_id.name(&ctx.cache).expect("Failed to get guild name!").as_str(),
+        ), 
+        colors::RED, 
+        &msg.channel_id, 
+        &format!("User <@{}> has been kicked", user_id.as_u64()), 
+        &format!(
+            "I was unable to DM <@{}> about their moderation.", 
+            user_id.as_u64()
+        ), 
+        colors::GREEN, 
+        reason.as_deref()
+    ).await?;
+
+    database::add_moderation(&ctx.data, guild_id, user_id, ModerationType::Kick, reason.as_deref()).await?;
 
     if let Some(reason) = &reason {
         guild_id.kick_with_reason(&ctx.http, user_id, &reason).await?;
     } else {
         guild_id.kick(&ctx.http, user_id).await?;
-    }
-    
-
-    msg.channel_id.send_message(&ctx.http, |m| {
-        m.embed(|e| { e
-            .color(0xa6e3a1)
-            .field("Zap!", format!("User <@{}> has been kicked", user_id.as_u64()), true);
-
-            if let Some(reason) = reason {
-                e.field("Reason:", &reason, false);
-            }
-
-            e
-        })
-    }).await?;
-
-    if let Err(_) = dm_success {
-        msg.channel_id.send_message(&ctx.http, |m| {
-            m.embed(|e| e
-                .color(0xf38ba8)
-                .description(format!("I was unable to DM <@{}> about their moderation.", user_id.as_u64()))
-            )
-        }).await?;
     }
 
     Ok(())

@@ -2,6 +2,7 @@ mod commands;
 mod groups;
 mod hooks;
 mod database;
+mod colors;
 
 use std::fs;
 use std::error::Error;
@@ -131,7 +132,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     });
 
-    let temp_moderations_database = database::get_database(&client.data).await;
+    let moderations_database = database::get_database(&client.data).await;
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(Duration::from_secs(5)).await;
@@ -139,12 +140,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let current_time = Timestamp::now().unix_timestamp();
 
             let entries = sqlx::query!(
-                "SELECT guild_id, user_id, moderation_type FROM timed_moderations WHERE expiry_date < ? ORDER BY guild_id",
+                "SELECT guild_id, user_id, moderation_type FROM moderations WHERE expiry_date < ? AND active = TRUE",
                 current_time
             )
-                .fetch_all(&*temp_moderations_database)
+                .fetch_all(&*moderations_database) 
                 .await
                 .expect("Failed to get current moderations!");
+
+            sqlx::query!(
+                "UPDATE moderations SET active = FALSE WHERE expiry_date < ?",
+                current_time
+            )
+                .execute(&*moderations_database)
+                .await
+                .expect("Failed to write to database!");
 
             for entry in entries {
                 let guild_id = GuildId(entry.guild_id as u64);
@@ -159,14 +168,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     _ => () // There should be no other timed events
                 }
             }
-
-            sqlx::query!(
-                "DELETE FROM timed_moderations WHERE expiry_date < ?",
-                current_time
-            )
-                .execute(&*temp_moderations_database)
-                .await
-                .expect("Failed to remove from database!");
         }
     });
 
