@@ -8,5 +8,5 @@ use crate::commands::moderation::*;
 struct General;
 
 #[group]
-#[commands(ban)]
+#[commands(ban, kick)]
 struct Moderators;

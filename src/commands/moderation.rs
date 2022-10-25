@@ -45,7 +45,7 @@ impl TryFrom<u8> for ModerationType {
 }
 
 #[command]
-#[required_permissions("BAN_MEMBERS")]
+#[required_permissions(BAN_MEMBERS)]
 pub async fn ban(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
     let user_id = args.single::<UserId>()?;
     let time_string = args.single::<String>()?;
@@ -87,6 +87,59 @@ pub async fn ban(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult 
         m.embed(|e| { e
             .color(0xa6e3a1)
             .field("Zap!", format!("User <@{}> has been banned until <t:{}:F>", user_id.as_u64(), unban_time.unix_timestamp()), true);
+
+            if reason.len() > 0 {
+                e.field("Reason:", reason, false);
+            }
+
+            e
+        })
+    }).await?;
+
+    if let Err(_) = dm_success {
+        msg.channel_id.send_message(&ctx.http, |m| {
+            m.embed(|e| e
+                .color(0xf38ba8)
+                .description(format!("I was unable to DM <@{}> about their moderation.", user_id.as_u64()))
+            )
+        }).await?;
+    }
+
+    Ok(())
+}
+
+#[command]
+#[required_permissions(KICK_MEMBERS)]
+pub async fn kick(ctx: &Context, msg: &Message, mut args: Args) -> CommandResult {
+    let user_id = args.single::<UserId>()?;
+    let reason = args.rest();
+
+    let guild_id = msg.guild_id.expect("Failed to get guild id!");
+
+    let dm_channel = user_id.create_dm_channel(&ctx.http).await?;
+
+    let dm_success = dm_channel.send_message(&ctx.http, |m| {
+        m.embed(|e| { e
+            .color(0xf38ba8)
+            .field("Zap!", format!(
+                "You have been kicked from **{}**!", 
+                guild_id.name(&ctx.cache).expect("Failed to get guild name!").as_str(),
+            ), true);
+    
+            if reason.len() > 0 {
+                e.field("Reason:", reason, false);
+            }
+    
+            e
+        })
+    }).await;
+
+    guild_id.kick_with_reason(&ctx.http, user_id, reason).await?;
+
+    msg.channel_id.send_message(&ctx.http, |m| {
+        m.embed(|e| { e
+            .color(0xa6e3a1)
+            .field("Zap!", format!("User <@{}> has been kicked", user_id.as_u64()), true);
 
             if reason.len() > 0 {
                 e.field("Reason:", reason, false);
