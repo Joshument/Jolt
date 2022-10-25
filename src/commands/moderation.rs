@@ -50,6 +50,7 @@ impl TryFrom<u8> for ModerationType {
 struct TimedModerationInfo {
     guild_id: GuildId,
     user_id: UserId,
+    administered_at: Timestamp,
     expiry_date: Timestamp,
     reason: Option<String>,
 }
@@ -57,6 +58,7 @@ struct TimedModerationInfo {
 struct ModerationInfo {
     guild_id: GuildId,
     user_id: UserId,
+    administered_at: Timestamp,
     reason: Option<String>,
 }
 
@@ -78,7 +80,7 @@ async fn get_timed_moderation_info(msg: &Message, mut args: Args) -> Result<Time
     let expiry_date = Timestamp::from_unix_timestamp(now.unix_timestamp() + time.as_secs() as i64)?;
     let guild_id = msg.guild_id.expect("Failed to get guild id!");
 
-    Ok(TimedModerationInfo { guild_id, user_id, expiry_date, reason: reason })
+    Ok(TimedModerationInfo { guild_id, user_id, administered_at: now, expiry_date, reason: reason })
 }
 
 async fn get_moderation_info(msg: &Message, mut args: Args) -> Result<ModerationInfo, CommandError> {
@@ -95,7 +97,7 @@ async fn get_moderation_info(msg: &Message, mut args: Args) -> Result<Moderation
 
     let guild_id = msg.guild_id.expect("Failed to get guild id!");
 
-    Ok(ModerationInfo { guild_id, user_id, reason: reason })
+    Ok(ModerationInfo { guild_id, user_id, administered_at: Timestamp::now(), reason: reason })
 }
 
 // This function saves a lot of repeated embeds that would be used in multiple contexts with slightly different values.
@@ -184,7 +186,7 @@ pub async fn ban(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         reason.as_deref()
     ).await?;
 
-    database::add_temporary_moderation(&ctx.data, guild_id, user_id, ModerationType::Ban, expiry_date, reason.as_deref()).await?;
+    database::add_temporary_moderation(&ctx.data, guild_id, user_id, ModerationType::Ban, moderation_info.administered_at, expiry_date, reason.as_deref()).await?;
 
     if let Some(reason) = &reason {
         guild_id.ban_with_reason(&ctx.http, &user_id, 0, &reason).await?;
@@ -224,7 +226,7 @@ pub async fn kick(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         reason.as_deref()
     ).await?;
 
-    database::add_moderation(&ctx.data, guild_id, user_id, ModerationType::Kick, reason.as_deref()).await?;
+    database::add_moderation(&ctx.data, guild_id, user_id, ModerationType::Kick, moderation_info.administered_at, reason.as_deref()).await?;
 
     if let Some(reason) = &reason {
         guild_id.kick_with_reason(&ctx.http, user_id, &reason).await?;
@@ -299,7 +301,7 @@ pub async fn timeout(ctx: &Context, msg: &Message, args: Args) -> CommandResult 
         reason.as_deref()
     ).await?;
 
-    database::add_temporary_moderation(&ctx.data, guild_id, user_id, ModerationType::Timeout, expiry_date, reason.as_deref()).await?;
+    database::add_temporary_moderation(&ctx.data, guild_id, user_id, ModerationType::Timeout, moderation_info.administered_at, expiry_date, reason.as_deref()).await?;
 
     Ok(())
 }

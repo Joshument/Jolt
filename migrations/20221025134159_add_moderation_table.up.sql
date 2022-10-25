@@ -4,6 +4,7 @@ CREATE TABLE moderations (
     guild_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
     moderation_type TINYINT NOT NULL,
+    administered_at BIGINT NOT NULL,
     expiry_date BIGINT,
     reason TEXT,
     active BOOLEAN NOT NULL

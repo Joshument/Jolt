@@ -45,6 +45,7 @@ pub async fn add_temporary_moderation(
     guild_id: impl Into<GuildId>, 
     user_id: impl Into<UserId>, 
     moderation_type: ModerationType,
+    administered_at: Timestamp,
     expiry_date: Timestamp,
     reason: Option<&str>,
 ) -> sqlx::Result<()> {
@@ -54,14 +55,16 @@ pub async fn add_temporary_moderation(
     let user_id = user_id.into().0 as i64;
     let moderation_type_u8 = moderation_type as u8;
     let expiry_date = expiry_date.unix_timestamp();
+    let administered_at = administered_at.unix_timestamp();
 
     clean_double_expiries(database.clone(), guild_id, user_id, moderation_type).await?;
 
     sqlx::query!(
-        "INSERT INTO moderations (guild_id, user_id, moderation_type, expiry_date, reason, active) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO moderations (guild_id, user_id, moderation_type, administered_at, expiry_date, reason, active) VALUES (?, ?, ?, ?, ?, ?, ?)",
         guild_id,
         user_id,
         moderation_type_u8,
+        administered_at,
         expiry_date,
         reason,
         true
@@ -77,6 +80,7 @@ pub async fn add_moderation(
     guild_id: impl Into<GuildId>, 
     user_id: impl Into<UserId>, 
     moderation_type: ModerationType,
+    administered_at: Timestamp,
     reason: Option<&str>,
 ) -> sqlx::Result<()> {
     let database = get_database(data).await.clone();
@@ -84,14 +88,16 @@ pub async fn add_moderation(
     let guild_id = guild_id.into().0 as i64;
     let user_id = user_id.into().0 as i64;
     let moderation_type_u8 = moderation_type as u8;
+    let administered_at = administered_at.unix_timestamp();
 
     clean_double_expiries(database.clone(), guild_id, user_id, moderation_type).await?;
 
     sqlx::query!(
-        "INSERT INTO moderations (guild_id, user_id, moderation_type, reason, active) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO moderations (guild_id, user_id, moderation_type, administered_at, reason, active) VALUES (?, ?, ?, ?, ?, ?)",
         guild_id,
         user_id,
         moderation_type_u8,
+        administered_at,
         reason,
         true
     )
