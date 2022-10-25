@@ -157,6 +157,7 @@ pub async fn ban(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let moderation_info = get_timed_moderation_info(msg, args).await?;
     let guild_id = moderation_info.guild_id;
     let user_id = moderation_info.user_id;
+    let administered_at = moderation_info.administered_at;
     let expiry_date = moderation_info.expiry_date;
     let reason = moderation_info.reason;
 
@@ -186,7 +187,7 @@ pub async fn ban(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         reason.as_deref()
     ).await?;
 
-    database::add_temporary_moderation(&ctx.data, guild_id, user_id, ModerationType::Ban, moderation_info.administered_at, expiry_date, reason.as_deref()).await?;
+    database::add_temporary_moderation(&ctx.data, guild_id, user_id, ModerationType::Ban, administered_at, expiry_date, reason.as_deref()).await?;
 
     if let Some(reason) = &reason {
         guild_id.ban_with_reason(&ctx.http, &user_id, 0, &reason).await?;
@@ -203,6 +204,7 @@ pub async fn kick(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
     let moderation_info = get_moderation_info(msg, args).await?;
     let guild_id = moderation_info.guild_id;
     let user_id = moderation_info.user_id;
+    let administered_at = moderation_info.administered_at;
     let reason = moderation_info.reason;
 
     let dm_channel = user_id.create_dm_channel(&ctx.http).await?;
@@ -226,7 +228,7 @@ pub async fn kick(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         reason.as_deref()
     ).await?;
 
-    database::add_moderation(&ctx.data, guild_id, user_id, ModerationType::Kick, moderation_info.administered_at, reason.as_deref()).await?;
+    database::add_moderation(&ctx.data, guild_id, user_id, ModerationType::Kick, administered_at, reason.as_deref()).await?;
 
     if let Some(reason) = &reason {
         guild_id.kick_with_reason(&ctx.http, user_id, &reason).await?;
