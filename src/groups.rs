@@ -4,7 +4,7 @@ use crate::commands::meta::*;
 use crate::commands::moderation::*;
 
 #[group]
-#[commands(ping)]
+#[commands(ping, info)]
 struct General;
 
 #[group]

@@ -4,7 +4,7 @@ mod hooks;
 mod database;
 mod colors;
 
-use std::fs;
+use std::{fs, time::Instant};
 use std::error::Error;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -22,6 +22,9 @@ use sqlx::sqlite;
 
 use groups::*;
 use hooks::*;
+
+// const GIT_HASH: &str = env!("GIT_HASH");
+const VERSION: &str = concat!("git-", env!("GIT_HASH"));
 
 #[derive(Serialize, Deserialize)]
 struct Config {
@@ -102,11 +105,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .event_handler(Handler)
         .await
         .expect("Error creating client!");
-
+    let uptime = Instant::now();
     {
         let mut data = client.data.write().await;
         data.insert::<ShardManagerContainer>(client.shard_manager.clone());
         data.insert::<database::Database>(Arc::new(database));
+        data.insert::<commands::meta::Uptime>(Arc::new(uptime));
     }
 
     let shard_manager = client.shard_manager.clone();

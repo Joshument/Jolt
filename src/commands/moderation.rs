@@ -3,7 +3,6 @@ use crate::colors;
 
 use serenity::framework::standard::macros::command;
 use serenity::framework::standard::{Args, CommandResult, CommandError};
-use serenity::http::Http;
 use serenity::model::prelude::*;
 use serenity::prelude::*;
 use serenity::model::{error, permissions};
@@ -117,7 +116,7 @@ async fn send_moderation_messages(
         m.embed(|e| { e
             .color(dm_color)
             .field("Zap!", dm_message, true);
-    
+
             if let Some(reason) = &reason {
                 e.field("Reason:", &reason, false);
             }
