@@ -6,8 +6,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-serenity = { version = "0.11.5", features = ["framework", "standard_framework"] }
+serenity = { version = "0.11.5", features = ["framework", "standard_framework", "model", "cache"] }
 tokio = { version = "1.21.2", features = ["macros", "rt-multi-thread", "signal"] }
 serde_json = "1.0.87"
 serde = { version = "1.0.147", features = ["derive"] }
 humantime = "2.1.0"
+sqlx = { version = "0.6", features = ["runtime-tokio-rustls", "sqlite", "offline"] }

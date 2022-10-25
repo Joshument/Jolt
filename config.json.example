@@ -1,4 +1,5 @@
 {
     "token": "YOUR_DISCORD_TOKEN",
-    "prefix": "%"
+    "prefix": "%",
+    "database": "path/to/database"
 }

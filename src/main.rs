@@ -1,35 +1,32 @@
-mod messagehandler;
-mod slashcommands;
 mod commands;
+mod groups;
+mod hooks;
+mod database;
 
 use std::fs;
 use std::error::Error;
-
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
+use commands::moderation::ModerationType;
 use serenity::async_trait;
-use serenity::client::Cache;
 use serenity::client::bridge::gateway::ShardManager;
-use serenity::framework::standard::DispatchError;
-use serenity::framework::standard::macros::group;
 use serenity::framework::StandardFramework;
-use serenity::framework::standard::macros::hook;
 use serenity::http::Http;
 use serenity::model::prelude::*;
 use serenity::prelude::*;
-
 use serde::{Deserialize, Serialize};
+use sqlx::sqlite;
 
-use commands::meta::*;
-use commands::moderation::*;
-use tokio::time::sleep;
+use groups::*;
+use hooks::*;
 
 #[derive(Serialize, Deserialize)]
 struct Config {
     token: String,
     prefix: String,
+    database: String,
 }
 
 pub struct ShardManagerContainer;
@@ -37,14 +34,6 @@ pub struct ShardManagerContainer;
 impl TypeMapKey for ShardManagerContainer {
     type Value = Arc<Mutex<ShardManager>>;
 }
-
-#[group]
-#[commands(ping)]
-struct General;
-
-#[group]
-#[commands(ban)]
-struct Moderators;
 
 pub struct Handler;
 
@@ -64,25 +53,23 @@ impl EventHandler for Handler {
     }
 }
 
-#[hook]
-async fn dispatch_error(ctx: &Context, msg: &Message, error: DispatchError, _command_name: &str) {
-    if let DispatchError::Ratelimited(info) = error {
-        // We notify them only once.
-        if info.is_first_try {
-            let _ = msg
-                .channel_id
-                .say(&ctx.http, &format!("Try this again in {} seconds.", info.as_secs()))
-                .await;
-        }
-    } else {
-        println!("{:?}", error)
-    }
-}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let raw_config = fs::read_to_string("./config.json")?;
     let config: Config = serde_json::from_str(&raw_config)?;
+
+    let database = sqlite::SqlitePoolOptions::new()
+        .max_connections(20)
+        .connect_with(
+            sqlite::SqliteConnectOptions::new()
+                .filename(config.database)
+                .create_if_missing(true)
+        )
+        .await
+        .expect("Couldn't connect to the database!");
+
+    sqlx::migrate!("./migrations").run(&database).await.expect("Couldn't run database migrations!");
 
     let http = Http::new(&config.token);
 
@@ -102,11 +89,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .configure(|c| c.owners(owners).prefix(config.prefix))
         .group(&GENERAL_GROUP)
         .group(&MODERATORS_GROUP)
-        .on_dispatch_error(dispatch_error);
+        .on_dispatch_error(dispatch_error)
+        .after(after);
 
     let intents = GatewayIntents::GUILD_MESSAGES
         | GatewayIntents::DIRECT_MESSAGES
-        | GatewayIntents::MESSAGE_CONTENT;
+        | GatewayIntents::MESSAGE_CONTENT
+        | GatewayIntents::GUILDS;
     let mut client = Client::builder(&config.token, intents)
         .framework(framework)
         .event_handler(Handler)
@@ -115,7 +104,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     {
         let mut data = client.data.write().await;
-        data.insert::<ShardManagerContainer>(client.shard_manager.clone())
+        data.insert::<ShardManagerContainer>(client.shard_manager.clone());
+        data.insert::<database::Database>(Arc::new(database));
     }
 
     let shard_manager = client.shard_manager.clone();
@@ -127,7 +117,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let shard_manager = client.shard_manager.clone();
     tokio::spawn(async move {
         loop {
-            sleep(Duration::from_secs(30)).await;
+            tokio::time::sleep(Duration::from_secs(30)).await;
 
             let lock = shard_manager.lock().await;
             let shard_runners = lock.runners.lock().await;
@@ -141,7 +131,46 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     });
 
-    if let Err(why) = client.start_shards(1).await {
+    let temp_moderations_database = database::get_database(&client.data).await;
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(Duration::from_secs(5)).await;
+
+            let current_time = Timestamp::now().unix_timestamp();
+
+            let entries = sqlx::query!(
+                "SELECT guild_id, user_id, moderation_type FROM timed_moderations WHERE expiry_date < ? ORDER BY guild_id",
+                current_time
+            )
+                .fetch_all(&*temp_moderations_database)
+                .await
+                .expect("Failed to get current moderations!");
+
+            for entry in entries {
+                let guild_id = GuildId(entry.guild_id as u64);
+                let user_id = UserId(entry.user_id as u64);
+                let moderation_type: ModerationType = (entry.moderation_type as u8).try_into()
+                    .expect("Failed to convert moderation_type into ModerationType enum!");
+
+                match moderation_type {
+                    ModerationType::Ban => guild_id.unban(&http, user_id).await
+                        .expect(format!("Failed to unban user {} from {}", user_id, guild_id).as_str()),
+                    ModerationType::Mute => unimplemented!(),
+                    _ => () // There should be no other timed events
+                }
+            }
+
+            sqlx::query!(
+                "DELETE FROM timed_moderations WHERE expiry_date < ?",
+                current_time
+            )
+                .execute(&*temp_moderations_database)
+                .await
+                .expect("Failed to remove from database!");
+        }
+    });
+
+    if let Err(why) = client.start_autosharded().await {
         println!("Client error: {:?}", why);
     }
 
