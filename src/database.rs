@@ -22,7 +22,7 @@ pub async fn add_temporary_moderation(
     user_id: impl Into<UserId>, 
     moderation_type: ModerationType,
     expiry_date: Timestamp,
-    reason: &str,
+    reason: &Option<String>,
 ) -> sqlx::Result<()> {
     let database = get_database(data).await.clone();
 

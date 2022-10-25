@@ -4,5 +4,5 @@ CREATE TABLE timed_moderations (
     user_id BIGINT NOT NULL,
     moderation_type TINYINT NOT NULL,
     expiry_date BIGINT NOT NULL,
-    reason TEXT NOT NULL
+    reason TEXT
 )
