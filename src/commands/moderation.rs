@@ -122,11 +122,7 @@ pub async fn ban(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
         })
     }).await;
 
-    let database_reason = if let Some(reason) = &reason {
-        reason
-    } else {
-        ""
-    };
+    let database_reason = reason.as_deref().unwrap_or("");
 
     database::add_temporary_moderation(&ctx.data, guild_id, user_id, ModerationType::Ban, expiry_date, database_reason).await?;
 
