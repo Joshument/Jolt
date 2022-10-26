@@ -3,9 +3,35 @@ use crate::colors;
 use serenity::framework::standard::{DispatchError, CommandResult};
 use serenity::framework::standard::macros::hook;
 use serenity::model::prelude::Message;
-use serenity::prelude::Context;
+use serenity::prelude::*;
 use serenity::http::error::Error as HttpError;
 use serenity::framework::standard::ArgError;
+use serenity::model::misc::UserIdParseError;
+
+pub fn parse_error_to_english<'a>(error: Box<dyn std::error::Error + Send + Sync>) -> Option<&'a str> {
+    if let Some(serenity_error) = error.downcast_ref::<SerenityError>() {
+        match serenity_error {
+            SerenityError::Http(http_error) => {
+                match http_error.as_ref() {
+                    HttpError::UnsuccessfulRequest(error_response) => {
+                        match error_response.error.code {
+                            50033 => {
+                                Some("That user does not exist!")
+                            }
+                            _ => None
+                        }
+                    }
+                    _ => None
+                }
+            }
+            _ => None
+        }
+    } else if let Some(_) = error.downcast_ref::<ArgError<UserIdParseError>>() {
+        Some("That user does not exist!")
+    } else {
+        None
+    }
+}
 
 #[hook]
 pub async fn dispatch_error(ctx: &Context, msg: &Message, error: DispatchError, _command_name: &str) {
@@ -30,23 +56,7 @@ pub async fn after(ctx: &Context, msg: &Message, command_name: &str, command_res
             println!("Command '{}' returned error {:?}", command_name, why);
 
             // Message to send on failure
-            let error_message: Option<&str> = {
-                if let Some(http_error) = why.downcast_ref::<HttpError>() {
-                    match http_error {
-                        HttpError::UnsuccessfulRequest(error_response) => {
-                            match error_response.error.code {
-                                50033 => {
-                                    Some("That user does not exist!")
-                                }
-                                _ => None
-                            }
-                        }
-                        _ => None
-                    }
-                } else {
-                    None
-                }
-            };
+            let error_message = parse_error_to_english(why);
 
             if let Some(message) = error_message {
                 msg.channel_id.send_message(&ctx.http, |m| {
