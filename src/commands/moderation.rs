@@ -3,6 +3,8 @@ use crate::colors;
 
 use serenity::framework::standard::macros::command;
 use serenity::framework::standard::{Args, CommandResult, CommandError};
+use serenity::http::CacheHttp;
+use serenity::http::Http;
 use serenity::model::prelude::*;
 use serenity::prelude::*;
 use serenity::model::{error, permissions};
@@ -61,7 +63,7 @@ struct ModerationInfo {
     reason: Option<String>,
 }
 
-async fn get_timed_moderation_info(msg: &Message, mut args: Args) -> Result<TimedModerationInfo, CommandError> {
+fn get_timed_moderation_info(msg: &Message, mut args: Args) -> Result<TimedModerationInfo, CommandError> {
     let user_id = args.single::<UserId>()?;
     let time_string = args.single::<String>()?;
     let reason = {
@@ -82,7 +84,7 @@ async fn get_timed_moderation_info(msg: &Message, mut args: Args) -> Result<Time
     Ok(TimedModerationInfo { guild_id, user_id, administered_at: now, expiry_date, reason: reason })
 }
 
-async fn get_moderation_info(msg: &Message, mut args: Args) -> Result<ModerationInfo, CommandError> {
+fn get_moderation_info(msg: &Message, mut args: Args) -> Result<ModerationInfo, CommandError> {
     let user_id = args.single::<UserId>()?;
     let reason = {
         let temp = args.rest();
@@ -153,7 +155,7 @@ async fn send_moderation_messages(
 #[command]
 #[required_permissions(BAN_MEMBERS)]
 pub async fn ban(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    let moderation_info = get_timed_moderation_info(msg, args).await?;
+    let moderation_info = get_timed_moderation_info(msg, args)?;
     let guild_id = moderation_info.guild_id;
     let user_id = moderation_info.user_id;
     let administered_at = moderation_info.administered_at;
@@ -200,7 +202,7 @@ pub async fn ban(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
 #[command]
 #[required_permissions(KICK_MEMBERS)]
 pub async fn kick(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    let moderation_info = get_moderation_info(msg, args).await?;
+    let moderation_info = get_moderation_info(msg, args)?;
     let guild_id = moderation_info.guild_id;
     let user_id = moderation_info.user_id;
     let administered_at = moderation_info.administered_at;
@@ -248,7 +250,7 @@ pub async fn timeout(ctx: &Context, msg: &Message, args: Args) -> CommandResult 
        return Err(From::from(error::Error::InvalidPermissions(permissions::Permissions::MODERATE_MEMBERS)));
     }
 
-    let moderation_info = get_timed_moderation_info(msg, args).await?;
+    let moderation_info = get_timed_moderation_info(msg, args)?;
     let guild_id = moderation_info.guild_id;
     let user_id = moderation_info.user_id;
     let expiry_date = moderation_info.expiry_date;
