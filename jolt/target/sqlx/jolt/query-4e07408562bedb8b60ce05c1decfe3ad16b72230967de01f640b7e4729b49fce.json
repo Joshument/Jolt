@@ -1,0 +1,11 @@
+{
+  "query": "UPDATE moderations SET active = FALSE WHERE expiry_date < ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "6ccce90447e3dfee65171990ff25f7c50afe7c6c03fceba530b0710ab70732e4"
+}
