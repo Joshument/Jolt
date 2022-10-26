@@ -8,6 +8,8 @@ use serenity::http::error::Error as HttpError;
 use serenity::framework::standard::ArgError;
 use serenity::model::misc::UserIdParseError;
 
+use humantime::DurationError;
+
 pub fn parse_error_to_english<'a>(error: Box<dyn std::error::Error + Send + Sync>) -> Option<&'a str> {
     if let Some(serenity_error) = error.downcast_ref::<SerenityError>() {
         match serenity_error {
@@ -28,6 +30,10 @@ pub fn parse_error_to_english<'a>(error: Box<dyn std::error::Error + Send + Sync
         }
     } else if let Some(_) = error.downcast_ref::<ArgError<UserIdParseError>>() {
         Some("That user does not exist!")
+    } else if let Some(duration_error) = error.downcast_ref::<DurationError>() {
+        match duration_error {
+            _ => Some("Invalid time duration!")
+        }
     } else {
         None
     }
