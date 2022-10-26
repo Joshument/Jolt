@@ -3,7 +3,7 @@ use std::sync::Arc;
 use serenity::prelude::*;
 use serenity::model::prelude::*;
 
-use crate::commands::moderation::ModerationType;
+use crate::commands::moderation::types::ModerationType;
 
 pub struct Database;
 
@@ -49,7 +49,7 @@ pub async fn add_temporary_moderation(
     expiry_date: Timestamp,
     reason: Option<&str>,
 ) -> sqlx::Result<()> {
-    let database = get_database(data).await.clone();
+    let database = get_database(data).await;
 
     let guild_id = guild_id.into().0 as i64;
     let user_id = user_id.into().0 as i64;
@@ -83,7 +83,7 @@ pub async fn add_moderation(
     administered_at: Timestamp,
     reason: Option<&str>,
 ) -> sqlx::Result<()> {
-    let database = get_database(data).await.clone();
+    let database = get_database(data).await;
 
     let guild_id = guild_id.into().0 as i64;
     let user_id = user_id.into().0 as i64;
