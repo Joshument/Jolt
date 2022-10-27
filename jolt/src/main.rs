@@ -15,6 +15,7 @@ use sqlx::sqlite;
 
 use commands::meta::*;
 use commands::moderation::*;
+use commands::configuration::*;
 
 // const GIT_HASH: &str = env!("GIT_HASH");
 const VERSION: &str = concat!("git-", env!("GIT_HASH"));
@@ -83,13 +84,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
             commands: vec![
+                // Meta
                 ping(),
                 info(),
+
+                // Moderation
                 ban(),
                 unban(),
                 kick(),
                 timeout(),
-                untimeout()
+                untimeout(),
+
+                // Configuration
+                mute_role()
             ],
             prefix_options: PrefixFrameworkOptions {
                 prefix: Some(config.prefix),

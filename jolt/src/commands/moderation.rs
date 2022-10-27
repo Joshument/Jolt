@@ -8,8 +8,6 @@ use crate::commands::moderation::utilities::*;
 
 use poise::serenity_prelude;
 
-
-
 /// Ban a user (with an optional specified time)
 #[poise::command(
     prefix_command,
