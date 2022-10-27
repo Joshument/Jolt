@@ -94,9 +94,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 kick(),
                 timeout(),
                 untimeout(),
+                mute(),
+                unmute(),
 
                 // Configuration
-                mute_role()
+                mute_role(),
             ],
             prefix_options: PrefixFrameworkOptions {
                 prefix: Some(config.prefix),
@@ -155,7 +157,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                 match moderation_type {
                                     ModerationType::Ban => guild_id.unban(&moderations_ctx.http, user_id).await
                                         .expect(format!("Failed to unban user {} from {}", user_id, guild_id).as_str()),
-                                    ModerationType::Mute => unimplemented!(),
+                                    ModerationType::Mute => {
+                                        let role = database::get_mute_role(&moderations_database, guild_id)
+                                            .await.expect("Failed to open database!");
+                                        if let Some(role_id) = role {
+                                            let mut member = guild_id.member(&moderations_ctx, user_id).await.expect("Failed to get member!");
+                                            member.remove_role(&moderations_ctx.http, role_id).await.expect("Failed to remove role from member!");
+                                        }
+                                    },
                                     _ => () // Either there is no timed event, or the event has a built-in expiry (timeout)
                                 }
                             }

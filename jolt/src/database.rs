@@ -1,5 +1,5 @@
 use poise::serenity_prelude;
-use serenity_prelude::{GuildId, UserId, Timestamp};
+use serenity_prelude::{GuildId, UserId, RoleId, Timestamp};
 
 use crate::commands::moderation::types::ModerationType;
 
@@ -67,4 +67,43 @@ pub async fn add_moderation(
     .await?;
 
     Ok(())
+}
+
+pub async fn set_mute_role(
+    database: &sqlx::SqlitePool,
+    guild_id: impl Into<GuildId>,
+    role_id: impl Into<RoleId>,
+) -> sqlx::Result<()> {
+    let guild_id_i64 = guild_id.into().0 as i64;
+    let role_id_i64 = role_id.into().0 as i64;
+    
+    sqlx::query!(
+        "INSERT INTO guild_settings (guild_id, mute_role_id) VALUES ($1, $2)
+        ON CONFLICT (guild_id) DO UPDATE SET mute_role_id=excluded.mute_role_id",
+        guild_id_i64,
+        role_id_i64
+    )
+    .execute(&*database)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn get_mute_role(
+    database: &sqlx::SqlitePool,
+    guild_id: impl Into<GuildId>,
+) -> sqlx::Result<Option<RoleId>> {
+    let guild_id_i64 = guild_id.into().0 as i64;
+
+    let entry = sqlx::query!(
+        "SELECT mute_role_id FROM guild_settings WHERE guild_id=?",
+        guild_id_i64
+    )
+        .fetch_one(database)
+        .await?;
+    
+    match entry.mute_role_id {
+        Some(role_id) => Ok(Some(RoleId(role_id as u64))),
+        None => Ok(None)
+    }
 }

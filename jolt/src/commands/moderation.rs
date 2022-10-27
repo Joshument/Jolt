@@ -73,12 +73,12 @@ pub async fn ban(
 }
 
 fn ban_help() -> String {
-    String::from("Kick a user from the server.
+    String::from("Ban a user from the server (with an optional specified time and reason).
 Example: %ban @Joshument#0001 10s joined 10 seconds too early
         ")
 }
 
-/// Unban a user (with an optional specified time)
+/// Unban a user
 #[poise::command(
     prefix_command,
     slash_command,
@@ -144,7 +144,7 @@ pub async fn kick(
     let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
     let administered_at = ctx.created_at();
 
-    let dm_channel = user.create_dm_channel(&ctx.discord().http).await?;
+    let dm_channel = user.create_dm_channel(&ctx.discord()).await?;
 
     send_moderation_messages(
         &ctx, 
@@ -210,7 +210,7 @@ pub async fn timeout(
     let expiry_date = 
         serenity_prelude::Timestamp::from_unix_timestamp(administered_at.unix_timestamp() + length.as_secs() as i64)?;
 
-    let dm_channel = user.create_dm_channel(&ctx.discord().http).await?;
+    let dm_channel = user.create_dm_channel(&ctx.discord()).await?;
 
 
     // start with the timeout to see if the specified time is over 28d or not
@@ -291,7 +291,7 @@ pub async fn untimeout(
 ) -> Result<(), crate::DynError> {
     let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
 
-    let dm_channel = user.create_dm_channel(&ctx.discord().http).await?;
+    let dm_channel = user.create_dm_channel(&ctx.discord()).await?;
     database::clear_moderations(&ctx.data().database, guild_id.0 as i64, user.id.0 as i64, ModerationType::Timeout).await?;
 
     guild_id
@@ -323,4 +323,165 @@ fn untimeout_help() -> String {
     String::from("Revoke the timeoutout a user.
 Example: %untimeout @Paze#2936 fan of the consistencies :)
             ")
+}
+
+/// Mute a user (with an optional specified time)
+#[poise::command(
+    prefix_command,
+    slash_command,
+    required_permissions = "MODERATE_MEMBERS",
+    required_bot_permissions = "MANAGE_ROLES",
+    help_text_fn = "mute_help",
+    category = "moderation",
+)]
+pub async fn mute(
+    ctx: crate::Context<'_>,
+    #[description = "User to mute"] user: serenity_prelude::User,
+    #[description = "Length of the mute"] length: Option<humantime::Duration>,
+    #[description = "Reason for mute"] reason: Option<String>,
+) -> Result<(), crate::DynError> {
+    let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
+
+    let mute_role = database::get_mute_role(&ctx.data().database, guild_id).await?;
+    if let None = mute_role {
+        ctx.send(|m| m
+            .embed(|e| e
+                .color(colors::RED)
+                .description("Mute role has not been set! Please set the mute role using %muterole")
+            )
+        ).await?;
+    }
+
+    let administered_at = ctx.created_at();
+    // Replaces Option<Duration> into Option<Timestamp>
+    // .transpose()? brings out the inner result propagate upstream with `?`
+    // Using `?` inside of .map() would instead return it to the closure, therefore making it invalid.
+    let expiry_date = length.map(|duration| 
+        serenity_prelude::Timestamp::from_unix_timestamp(administered_at.unix_timestamp() + duration.as_secs() as i64)
+    ).transpose()?;
+
+    let dm_channel = user.create_dm_channel(&ctx.discord()).await?;
+
+    send_moderation_messages(
+        &ctx, 
+        &dm_channel, 
+        &append_expiry_date(&format!("You have been muted in **{}**", 
+            &guild_id.name(&ctx.discord().cache).expect("Failed to get guild name!")), 
+            expiry_date
+        ),
+        colors::RED, 
+        "Zap!", 
+        &append_expiry_date(&format!("User <@{}> has been muted", user.id.as_u64()), expiry_date),
+        colors::GREEN,
+        &format!(
+            "I was unable to DM <@{}> about their moderation.", 
+            user.id.as_u64()
+        ), 
+        colors::RED, 
+        reason.as_deref()
+    ).await?;
+
+    database::add_moderation(
+        &ctx.data().database, 
+        guild_id, 
+        user.id, 
+        ModerationType::Mute, 
+        administered_at, 
+        expiry_date, 
+        reason.as_deref()
+    ).await?;
+
+    let mut member = guild_id.member(&ctx.discord(), user.id).await?;
+    // unwrap is safe to use here as there is already a check for `None` prior to this expression
+    member.add_role(&ctx.discord().http, mute_role.unwrap()).await?;
+
+    Ok(())
+}
+
+fn mute_help() -> String {
+    String::from("Mute a user (with an optional specified time).
+Example: %mute @Joshument#0001 3d keeps procrastinating on the modlogs command
+        ")
+}
+
+
+/// Mute a user (with an optional specified time)
+#[poise::command(
+    prefix_command,
+    slash_command,
+    required_permissions = "MODERATE_MEMBERS",
+    required_bot_permissions = "MANAGE_ROLES",
+    help_text_fn = "unmute_help",
+    category = "moderation",
+)]
+pub async fn unmute(
+    ctx: crate::Context<'_>,
+    #[description = "User to mute"] user: serenity_prelude::User,
+    #[description = "Length of the mute"] length: Option<humantime::Duration>,
+    #[description = "Reason for mute"] reason: Option<String>,
+) -> Result<(), crate::DynError> {
+    let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
+
+    let mute_role = database::get_mute_role(&ctx.data().database, guild_id).await?;
+    if let None = mute_role {
+        ctx.send(|m| m
+            .embed(|e| e
+                .color(colors::RED)
+                .description("Mute role has not been set! Please set the mute role using %muterole")
+            )
+        ).await?;
+    }
+
+    let administered_at = ctx.created_at();
+    // Replaces Option<Duration> into Option<Timestamp>
+    // .transpose()? brings out the inner result propagate upstream with `?`
+    // Using `?` inside of .map() would instead return it to the closure, therefore making it invalid.
+    let expiry_date = length.map(|duration| 
+        serenity_prelude::Timestamp::from_unix_timestamp(administered_at.unix_timestamp() + duration.as_secs() as i64)
+    ).transpose()?;
+
+    let dm_channel = user.create_dm_channel(&ctx.discord()).await?;
+
+    send_moderation_messages(
+        &ctx, 
+        &dm_channel, 
+        &append_expiry_date(&format!("You have been unmuted in **{}**", 
+            &guild_id.name(&ctx.discord().cache).expect("Failed to get guild name!")), 
+            expiry_date
+        ),
+        colors::RED, 
+        "!paZ", 
+        &append_expiry_date(&format!("User <@{}> has been unmuted", user.id.as_u64()), expiry_date),
+        colors::GREEN,
+        &format!(
+            "I was unable to DM <@{}> about their moderation.", 
+            user.id.as_u64()
+        ), 
+        colors::RED, 
+        reason.as_deref()
+    ).await?;
+
+    database::add_moderation(
+        &ctx.data().database, 
+        guild_id, 
+        user.id, 
+        ModerationType::Mute, 
+        administered_at, 
+        expiry_date, 
+        reason.as_deref()
+    ).await?;
+
+    database::clear_moderations(&ctx.data().database, guild_id.0 as i64, user.id.0 as i64, ModerationType::Mute).await?;
+
+    let mut member = guild_id.member(&ctx.discord(), user.id).await?;
+    // unwrap is safe to use here as there is already a check for `None` prior to this expression
+    member.remove_role(&ctx.discord().http, mute_role.unwrap()).await?;
+
+    Ok(())
+}
+
+fn unmute_help() -> String {
+    String::from("Mute a user (with an optional specified time).
+Example: %mute @Joshument#0001 3d keeps procrastinating on the modlogs command
+        ")
 }

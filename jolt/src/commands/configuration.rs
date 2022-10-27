@@ -20,23 +20,26 @@ pub async fn mute_role(
     let guild_id = ctx.guild_id().expect("Couldn't get guild id!");
     let database = ctx.data().database.clone();
 
-    let guild_id_i64 = guild_id.0 as i64;
-    let role_id_i64 = role_id.0 as i64;
-    
-    sqlx::query!(
-        "INSERT INTO guild_settings (guild_id, mute_role_id) VALUES ($1, $2)
-        ON CONFLICT (guild_id) DO UPDATE SET mute_role_id=excluded.mute_role_id",
-        guild_id_i64,
-        role_id_i64
-    )
-    .execute(&*database)
-    .await?;
+    database::set_mute_role(&database, guild_id, role_id).await?;
+
+    ctx.send(|m| m
+        .embed(|e| e
+            .color(colors::GREEN)
+            .description(format!("Role <@&{}> has been assigned as the mute role.", role_id))
+            .field(
+                "NOTE", 
+                "This action does *not* change the permissions of any channels, make sure you set them up before using the mute commands.", 
+                false
+            )
+        )
+    ).await?;
 
     Ok(())
 }
 
 fn mute_role_help() -> String {
     String::from("Set the mute role in the server
+**NOTE**: This does *not* change the permissions of channels, you will have to set them up yourself.
 Example: %muterole @Muted
     ")
 }
