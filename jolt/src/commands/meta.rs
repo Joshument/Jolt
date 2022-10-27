@@ -1,44 +1,46 @@
 use crate::colors;
 
-use std::sync::Arc;
-use std::time::Instant;
+use poise::serenity_prelude;
+use serenity_prelude::{Timestamp};
 
-use serenity::framework::standard::macros::command;
-use serenity::framework::standard::CommandResult;
-use serenity::model::prelude::*;
-use serenity::prelude::*;
+/// Get the latency of the bot (in milliseconds)
+#[poise::command(
+    prefix_command, 
+    slash_command,
+    help_text_fn = "ping_help",
+    category = "meta",
+)]
+pub async fn ping(
+    ctx: crate::Context<'_>,
+) -> Result<(), crate::DynError> {
+    let response_time_ms = Timestamp::now().timestamp_millis() - ctx.created_at().timestamp_millis();
 
-pub struct Uptime;
-
-impl TypeMapKey for Uptime {
-    type Value = Arc<Instant>;
-}
-
-pub async fn get_uptime(data: &Arc<RwLock<TypeMap>>) -> Arc<Instant> {
-    let data = data.read().await;
-    data.get::<Uptime>().expect("Failed to get uptime!").clone()
-}
-
-#[command]
-pub async fn ping(ctx: &Context, msg: &Message) -> CommandResult {
-    let response_time_ms = Timestamp::now().timestamp_millis() - msg.timestamp.timestamp_millis();
-
-    msg.channel_id.send_message(&ctx.http, |m| {
+    ctx.send(|m| {
         m.embed(|e| e
             .color(colors::GREEN)
             .field("Pong!", format!("Reply time: {}ms", response_time_ms), true)
         )
+        .ephemeral(true)
     }).await?;
 
     Ok(())
 }
 
-#[command]
-#[aliases(about)]
-pub async fn info(ctx: &Context, msg: &Message) -> CommandResult {
-    let uptime = get_uptime(&ctx.data).await.elapsed();
+fn ping_help() -> String {
+    "Get the latency of the bot (in milliseconds)".to_string()
+}
 
-    msg.channel_id.send_message(&ctx.http, |m| {
+/// Get information related to the bot
+#[poise::command(
+    prefix_command,
+    slash_command,
+    help_text_fn = "info_help",
+    category = "meta",
+)]
+pub async fn info(ctx: crate::Context<'_>) -> Result<(), crate::DynError> {
+    let uptime = &ctx.data().uptime.elapsed();
+
+    ctx.send(|m| {
         m.embed(|e| e
             .color(colors::BLUE)
             .title("Jolt Bot")
@@ -60,12 +62,12 @@ pub async fn info(ctx: &Context, msg: &Message) -> CommandResult {
                 ),
                 (
                     "Servers",
-                    &ctx.cache.guild_count().to_string(),
+                    &ctx.discord().cache.guild_count().to_string(),
                     true
                 ),
                 (
                     "Users",
-                    &ctx.cache.user_count().to_string(),
+                    &ctx.discord().cache.user_count().to_string(),
                     true,
                 ),
                 (
@@ -78,14 +80,19 @@ pub async fn info(ctx: &Context, msg: &Message) -> CommandResult {
             .footer(|f| {
                 f.text(format!(
                     "Shard {}/{} | Uptime {} | Ping {}ms",
-                    &ctx.shard_id,
-                    &ctx.cache.shard_count(),
-                    humantime::format_duration(uptime).to_string(),
-                    Timestamp::now().timestamp_millis() - msg.timestamp.timestamp_millis()
+                    &ctx.discord().shard_id,
+                    &ctx.discord().cache.shard_count(),
+                    humantime::format_duration(*uptime).to_string(),
+                    Timestamp::now().timestamp_millis() - ctx.created_at().timestamp_millis()
                 ))
             })
         )
+        .ephemeral(true)
     }).await?;
 
     Ok(())
+}
+
+fn info_help() -> String {
+    "Get information related to the bot".to_string()
 }

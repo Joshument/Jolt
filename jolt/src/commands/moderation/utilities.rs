@@ -1,11 +1,11 @@
 use crate::commands::moderation::types::*;
 
-use serenity::framework::standard::{Args, CommandResult, CommandError};
-use serenity::model::prelude::*;
-use serenity::prelude::*;
+use poise::serenity_prelude;
+use serenity_prelude::{Timestamp};
 
 use humantime;
 
+/*
 pub fn get_timed_moderation_info(msg: &Message, mut args: Args) -> Result<TimedModerationInfo, CommandError> {
     let user_id = args.single::<UserId>()?;
     let time_string = args.single::<String>()?;
@@ -26,37 +26,21 @@ pub fn get_timed_moderation_info(msg: &Message, mut args: Args) -> Result<TimedM
 
     Ok(TimedModerationInfo { guild_id, user_id, administered_at: now, expiry_date, reason: reason })
 }
-
-pub fn get_moderation_info(msg: &Message, mut args: Args) -> Result<ModerationInfo, CommandError> {
-    let user_id = args.single::<UserId>()?;
-    let reason = {
-        let temp = args.rest();
-
-        if temp.len() > 0 {
-            Some(temp.to_string())
-        } else {
-            None
-        }
-    };
-
-    let guild_id = msg.guild_id.expect("Failed to get guild id!");
-
-    Ok(ModerationInfo { guild_id, user_id, administered_at: Timestamp::now(), reason: reason })
-}
+*/
 
 // This function saves a lot of repeated embeds that would be used in multiple contexts with slightly different values.
 pub async fn send_moderation_messages(
-    ctx: &Context,
-    dm_channel: &PrivateChannel,
+    ctx: &serenity_prelude::Context,
+    dm_channel: &serenity_prelude::PrivateChannel,
     dm_message: &str,
     dm_color: u32,
-    channel: &ChannelId,
+    channel: &serenity_prelude::ChannelId,
     message: &str,
     color: u32,
     dm_fail_message: &str,
     dm_fail_color: u32,
     reason: Option<&str>
-) -> CommandResult {
+) -> Result<(), crate::DynError> {
     let dm_success = dm_channel.send_message(&ctx.http, |m| {
         m.embed(|e| { e
             .color(dm_color)
@@ -93,4 +77,17 @@ pub async fn send_moderation_messages(
     }
 
     Ok(())
+}
+
+/// Appends the expiry date (if exists)
+/// Function exists to reduce boilerplate
+pub fn append_expiry_date(message: &str, expiry_date: Option<serenity_prelude::Timestamp>) -> String {
+    match expiry_date {
+        Some(unix_time) => format!(
+            "{} until <t:{}:F>",
+            message, 
+            unix_time.unix_timestamp()
+        ),
+        None => message.to_string()
+    }
 }

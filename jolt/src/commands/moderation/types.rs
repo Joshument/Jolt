@@ -1,5 +1,3 @@
-use serenity::model::prelude::*;
-
 #[derive(Debug, Clone)]
 pub struct IntEnumError;
 
@@ -35,19 +33,4 @@ impl TryFrom<u8> for ModerationType {
             _ => Err(IntEnumError)
         }
     }
-}
-
-pub struct TimedModerationInfo {
-    pub guild_id: GuildId,
-    pub user_id: UserId,
-    pub administered_at: Timestamp,
-    pub expiry_date: Timestamp,
-    pub reason: Option<String>,
-}
-
-pub struct ModerationInfo {
-    pub guild_id: GuildId,
-    pub user_id: UserId,
-    pub administered_at: Timestamp,
-    pub reason: Option<String>,
 }

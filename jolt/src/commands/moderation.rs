@@ -6,131 +6,151 @@ use crate::colors;
 use crate::commands::moderation::types::*;
 use crate::commands::moderation::utilities::*;
 
-use serenity::framework::standard::macros::command;
-use serenity::framework::standard::{Args, CommandResult};
-use serenity::model::prelude::*;
-use serenity::prelude::*;
-use serenity::model::{error, permissions};
+use poise::serenity_prelude;
 
-#[command]
-#[required_permissions(BAN_MEMBERS)]
-pub async fn ban(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    let moderation_info = get_timed_moderation_info(msg, args)?;
-    let guild_id = moderation_info.guild_id;
-    let user_id = moderation_info.user_id;
-    let administered_at = moderation_info.administered_at;
-    let expiry_date = moderation_info.expiry_date;
-    let reason = moderation_info.reason;
 
-    let dm_channel = user_id.create_dm_channel(&ctx.http).await?;
+
+/// Ban a user for a specified amount of time
+#[poise::command(
+    prefix_command,
+    slash_command,
+    required_permissions = "BAN_MEMBERS",
+    required_bot_permissions = "BAN_MEMBERS",
+    help_text_fn = "ban_help",
+    category = "moderation",
+)]
+pub async fn ban(
+    ctx: crate::Context<'_>,
+    #[description = "User to ban"] user: serenity_prelude::User,
+    #[description = "Length of the ban"] length: Option<humantime::Duration>,
+    #[description = "Reason for ban"] reason: Option<String>,
+) -> Result<(), crate::DynError> {
+    let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
+    let administered_at = ctx.created_at();
+    // Replaces Option<Duration> into Option<Timestamp>
+    // .transpose()? brings out the inner result propagate upstream with `?`
+    // Using `?` inside of .map() would instead return it to the closure, therefore making it invalid.
+    let expiry_date = length.map(|duration| 
+        serenity_prelude::Timestamp::from_unix_timestamp(administered_at.unix_timestamp() + duration.as_secs() as i64)
+    ).transpose()?;
+
+    let dm_channel = user.create_dm_channel(&ctx.discord().http).await?;
 
     send_moderation_messages(
-        ctx, 
+        &ctx.discord(), 
         &dm_channel, 
-        &format!(
-            "You have been banned from **{}** until <t:{}:F>", 
-            guild_id.name(&ctx.cache).expect("Failed to get guild name!").as_str(), 
-            expiry_date.unix_timestamp()
-        ), 
+        &append_expiry_date(&format!("You have been banned from **{}**", user.id.as_u64()), expiry_date),
         colors::RED, 
-        &msg.channel_id, 
-        &format!(
-            "User <@{}> has been banned until <t:{}:F>", 
-            user_id.as_u64(), 
-            expiry_date.unix_timestamp()
-        ), 
+        &ctx.channel_id(), 
+        &append_expiry_date(&format!("User <@{}> has been banned", user.id.as_u64()), expiry_date),
         colors::GREEN,
         &format!(
             "I was unable to DM <@{}> about their moderation.", 
-            user_id.as_u64()
+            user.id.as_u64()
         ), 
         colors::RED, 
         reason.as_deref()
     ).await?;
 
-    database::add_temporary_moderation(&ctx.data, guild_id, user_id, ModerationType::Ban, administered_at, expiry_date, reason.as_deref()).await?;
+    database::add_moderation(&ctx.data(), guild_id, user.id, ModerationType::Ban, administered_at, expiry_date, reason.as_deref()).await?;
 
     if let Some(reason) = &reason {
-        guild_id.ban_with_reason(&ctx.http, &user_id, 0, &reason).await?;
+        guild_id.ban_with_reason(&ctx.discord().http, &user.id, 0, &reason).await?;
     } else {
-        guild_id.ban(&ctx.http, &user_id, 0).await?;
+        guild_id.ban(&ctx.discord().http, &user.id, 0).await?;
     }
 
     Ok(())
 }
 
-#[command]
-#[required_permissions(KICK_MEMBERS)]
-pub async fn kick(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    let moderation_info = get_moderation_info(msg, args)?;
-    let guild_id = moderation_info.guild_id;
-    let user_id = moderation_info.user_id;
-    let administered_at = moderation_info.administered_at;
-    let reason = moderation_info.reason;
+fn ban_help() -> String {
+    "Ban a user for a specified amount of time".to_string()
+}
 
-    let dm_channel = user_id.create_dm_channel(&ctx.http).await?;
+#[poise::command(
+    prefix_command,
+    slash_command,
+    required_permissions = "KICK_MEMBERS",
+    required_bot_permissions = "KICK_MEMBERS",
+    help_text_fn = "ban_help",
+    category = "moderation",
+)]
+pub async fn kick(
+    ctx: crate::Context<'_>,
+    #[description = "User to kick"] user: serenity_prelude::User,
+    #[description = "Reason for kick"] reason: Option<String>,
+) -> Result<(), crate::DynError> {
+    let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
+    let administered_at = ctx.created_at();
+
+    let dm_channel = user.create_dm_channel(&ctx.discord().http).await?;
 
     send_moderation_messages(
-        ctx, 
+        &ctx.discord(), 
         &dm_channel, 
         &format!(
             "You have been kicked from **{}**!", 
-            guild_id.name(&ctx.cache).expect("Failed to get guild name!").as_str(),
+            guild_id.name(&ctx.discord().cache).expect("Failed to get guild name!").as_str(),
         ), 
         colors::RED, 
-        &msg.channel_id, 
-        &format!("User <@{}> has been kicked", user_id.as_u64()), 
+        &ctx.channel_id(), 
+        &format!("User <@{}> has been kicked", user.id.as_u64()), 
         colors::GREEN,
         &format!(
             "I was unable to DM <@{}> about their moderation.", 
-            user_id.as_u64()
+            user.id.as_u64()
         ), 
         colors::RED, 
         reason.as_deref()
     ).await?;
 
-    database::add_moderation(&ctx.data, guild_id, user_id, ModerationType::Kick, administered_at, reason.as_deref()).await?;
+    database::add_moderation(&ctx.data(), guild_id, user.id, ModerationType::Kick, administered_at, None, reason.as_deref()).await?;
 
     if let Some(reason) = &reason {
-        guild_id.kick_with_reason(&ctx.http, user_id, &reason).await?;
+        guild_id.kick_with_reason(&ctx.discord().http, user.id, &reason).await?;
     } else {
-        guild_id.kick(&ctx.http, user_id).await?;
+        guild_id.kick(&ctx.discord().http, user.id,).await?;
     }
 
     Ok(())
 }
 
-#[command]
-pub async fn timeout(ctx: &Context, msg: &Message, args: Args) -> CommandResult {
-    let author_permissions = msg.guild(&ctx.cache)
-        .expect("Failed to get guild!")
-        .member_permissions(&ctx.http, msg.author.id).await?;
+#[poise::command(
+    prefix_command,
+    slash_command,
+    required_permissions = "MODERATE_MEMBERS",
+    required_bot_permissions = "MODERATE_MEMBERS",
+    help_text_fn = "ban_help",
+    category = "moderation",
+)]
+pub async fn timeout(
+    ctx: crate::Context<'_>,
+    #[description = "User to ban"] user: serenity_prelude::User,
+    #[description = "Length of the ban"] length: humantime::Duration,
+    #[description = "Reason for ban"] reason: Option<String>,
+) -> Result<(), crate::DynError> {
+    let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
+    let administered_at = ctx.created_at();
+    let expiry_date = 
+        serenity_prelude::Timestamp::from_unix_timestamp(administered_at.unix_timestamp() + length.as_secs() as i64)?;
 
-    if !author_permissions.moderate_members() {
-       return Err(From::from(error::Error::InvalidPermissions(permissions::Permissions::MODERATE_MEMBERS)));
-    }
+    let dm_channel = user.create_dm_channel(&ctx.discord().http).await?;
 
-    let moderation_info = get_timed_moderation_info(msg, args)?;
-    let guild_id = moderation_info.guild_id;
-    let user_id = moderation_info.user_id;
-    let expiry_date = moderation_info.expiry_date;
-    let reason = moderation_info.reason;
-
-    let dm_channel = user_id.create_dm_channel(&ctx.http).await?;
 
     // start with the timeout to see if the specified time is over 28d or not
     let successful_timeout = guild_id
-    .member(&ctx.http, &user_id).await?
-    .disable_communication_until_datetime(&ctx.http, expiry_date).await;
+    .member(&ctx.discord().http, &user.id).await?
+    .disable_communication_until_datetime(&ctx.discord().http, expiry_date).await;
 
     if let Err(e) = &successful_timeout {
         match e {
-            SerenityError::Http(_) => {
-                msg.channel_id.send_message(&ctx.http, |m| {
+            serenity_prelude::SerenityError::Http(_) => {
+                ctx.send(|m| {
                     m.embed(|e| e
                         .color(colors::RED)
                         .description("Timeouts must be shorter than 28 days.")
                     )
+                    .ephemeral(true)
                 }).await?;
             }
             _ => ()
@@ -141,30 +161,22 @@ pub async fn timeout(ctx: &Context, msg: &Message, args: Args) -> CommandResult 
     }
 
     send_moderation_messages(
-        ctx, 
+        &ctx.discord(), 
         &dm_channel, 
-        &format!(
-            "You have been timed out in **{}** until <t:{}:F>", 
-            guild_id.name(&ctx.cache).expect("Failed to get guild name!").as_str(), 
-            expiry_date.unix_timestamp()
-        ), 
+        &format!("You have been timed out from **{}** until <t:{}:F>", user.id.as_u64(), expiry_date.unix_timestamp()),
         colors::RED, 
-        &msg.channel_id, 
-        &format!(
-            "User <@{}> has been timed out until <t:{}:F>", 
-            user_id.as_u64(), 
-            expiry_date.unix_timestamp()
-        ), 
+        &ctx.channel_id(), 
+        &format!("User <@{}> has been timed out until <t:{}:F>", user.id.as_u64(), expiry_date.unix_timestamp()),
         colors::GREEN,
         &format!(
             "I was unable to DM <@{}> about their moderation.", 
-            user_id.as_u64()
+            user.id.as_u64()
         ), 
         colors::RED, 
         reason.as_deref()
     ).await?;
 
-    database::add_temporary_moderation(&ctx.data, guild_id, user_id, ModerationType::Timeout, moderation_info.administered_at, expiry_date, reason.as_deref()).await?;
+    database::add_moderation(&ctx.data(), guild_id, user.id, ModerationType::Ban, administered_at, Some(expiry_date), reason.as_deref()).await?;
 
     Ok(())
 }

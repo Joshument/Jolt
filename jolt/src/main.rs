@@ -1,27 +1,19 @@
 mod commands;
-mod groups;
-mod hooks;
 mod database;
 mod colors;
 
 use std::{fs, time::Instant};
 use std::error::Error;
 use std::collections::HashSet;
-use std::sync::Arc;
-use std::time::Duration;
 
-use commands::moderation::types::ModerationType;
-use serenity::async_trait;
-use serenity::client::bridge::gateway::ShardManager;
-use serenity::framework::StandardFramework;
-use serenity::http::Http;
-use serenity::model::prelude::*;
-use serenity::prelude::*;
+// use commands::moderation::types::ModerationType;
+use poise::{serenity_prelude, PrefixFrameworkOptions};
+use serenity_prelude::{http::Http, GatewayIntents};
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite;
 
-use groups::*;
-use hooks::*;
+use commands::meta::*;
+use commands::moderation::*;
 
 // const GIT_HASH: &str = env!("GIT_HASH");
 const VERSION: &str = concat!("git-", env!("GIT_HASH"));
@@ -33,17 +25,11 @@ struct Config {
     database: String,
 }
 
-pub struct ShardManagerContainer;
-
-impl TypeMapKey for ShardManagerContainer {
-    type Value = Arc<Mutex<ShardManager>>;
-}
-
 pub struct Handler;
 
-#[async_trait]
-impl EventHandler for Handler {
-    async fn ready(&self, _: Context, ready: Ready) {
+#[poise::async_trait]
+impl serenity_prelude::EventHandler for Handler {
+    async fn ready(&self, _: serenity_prelude::Context, ready: serenity_prelude::Ready) {
         if let Some(shard) = ready.shard {
             // Note that array index 0 is 0-indexed, while index 1 is 1-indexed.
             //
@@ -52,11 +38,18 @@ impl EventHandler for Handler {
         }
     }
 
-    async fn resume(&self, _: Context, _: ResumedEvent) {
+    async fn resume(&self, _: serenity_prelude::Context, _: serenity_prelude::ResumedEvent) {
         println!("Resumed!");
     }
 }
 
+pub struct Data {
+    database: sqlx::SqlitePool,
+    uptime: Instant,
+}
+
+pub type DynError = Box<dyn std::error::Error + Send + Sync>;
+pub type Context<'a> = poise::Context<'a, Data, DynError>;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -88,6 +81,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         Err(why) => panic!("Could not access application info: {:?}", why)
     };
 
+    /*
     let framework =
         StandardFramework::new()
         .configure(|c| c.owners(owners).prefix(config.prefix))
@@ -95,7 +89,51 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .group(&MODERATORS_GROUP)
         .on_dispatch_error(dispatch_error)
         .after(after);
+    */
 
+    let uptime = Instant::now();
+
+    let framework = poise::Framework::builder()
+        .options(poise::FrameworkOptions {
+            commands: vec![
+                ping(),
+                info(),
+                ban(),
+                kick(),
+                timeout()
+            ],
+            prefix_options: PrefixFrameworkOptions {
+                prefix: Some(config.prefix),
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .token(config.token)
+        .intents(GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT)
+        .user_data_setup(
+            move |ctx, _ready, framework| {
+                Box::pin(async move { 
+                    let commands = &framework.options().commands;
+                    let create_commands = poise::builtins::create_application_commands(commands);
+    
+                    serenity_prelude::Command::set_global_application_commands(&ctx.http, |b| {
+                        *b = create_commands;
+                        b
+                    }).await?;
+
+                    // let guild_id = serenity_prelude::GuildId(1033905219257516032);
+
+                    Ok(Data {
+                        database,
+                        uptime,
+                    }
+                )})
+            }
+        );
+
+    framework.run_autosharded().await?;
+
+    /*
     let intents = GatewayIntents::GUILD_MESSAGES
         | GatewayIntents::DIRECT_MESSAGES
         | GatewayIntents::MESSAGE_CONTENT
@@ -105,7 +143,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .event_handler(Handler)
         .await
         .expect("Error creating client!");
-    let uptime = Instant::now();
     {
         let mut data = client.data.write().await;
         data.insert::<ShardManagerContainer>(client.shard_manager.clone());
@@ -178,6 +215,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     if let Err(why) = client.start_autosharded().await {
         println!("Client error: {:?}", why);
     }
+    */
 
     Ok(())
 }
