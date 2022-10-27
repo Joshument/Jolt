@@ -21,7 +21,7 @@ pub async fn ban(
     ctx: crate::Context<'_>,
     #[description = "User to ban"] user: serenity_prelude::User,
     #[description = "Length of the ban"] length: Option<humantime::Duration>,
-    #[description = "Reason for ban"] reason: Option<String>,
+    #[description = "Reason for ban"] #[rest] reason: Option<String>,
 ) -> Result<(), crate::DynError> {
     let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
     let administered_at = ctx.created_at();
@@ -90,7 +90,7 @@ Example: %ban @Joshument#0001 10s joined 10 seconds too early
 pub async fn unban(
     ctx: crate::Context<'_>,
     #[description = "User to unban"] user: serenity_prelude::User,
-    #[description = "Reason for the unban"] reason: Option<String>,
+    #[description = "Reason for the unban"] #[rest] reason: Option<String>,
 ) -> Result<(), crate::DynError> {
     let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
     // let administered_at = ctx.created_at();
@@ -139,7 +139,7 @@ Example: %unban @Joshument#0001 my perspective of you has changed
 pub async fn kick(
     ctx: crate::Context<'_>,
     #[description = "User to kick"] user: serenity_prelude::User,
-    #[description = "Reason for kick"] reason: Option<String>,
+    #[description = "Reason for kick"] #[rest] reason: Option<String>,
 ) -> Result<(), crate::DynError> {
     let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
     let administered_at = ctx.created_at();
@@ -203,7 +203,7 @@ pub async fn timeout(
     ctx: crate::Context<'_>,
     #[description = "User to timeout"] user: serenity_prelude::User,
     #[description = "Length of the timeout"] length: humantime::Duration,
-    #[description = "Reason for timeout"] reason: Option<String>,
+    #[description = "Reason for timeout"] #[rest] reason: Option<String>,
 ) -> Result<(), crate::DynError> {
     let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
     let administered_at = ctx.created_at();
@@ -287,7 +287,7 @@ Example: %timeout @Paze#2936 10m not a fan of the inconsistencies
 pub async fn untimeout(
     ctx: crate::Context<'_>,
     #[description = "User to untimeout"] user: serenity_prelude::User,
-    #[description = "Reason for the untimeout"] reason: Option<String>,
+    #[description = "Reason for the untimeout"] #[rest] reason: Option<String>,
 ) -> Result<(), crate::DynError> {
     let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
 
@@ -338,7 +338,7 @@ pub async fn mute(
     ctx: crate::Context<'_>,
     #[description = "User to mute"] user: serenity_prelude::User,
     #[description = "Length of the mute"] length: Option<humantime::Duration>,
-    #[description = "Reason for mute"] reason: Option<String>,
+    #[description = "Reason for mute"] #[rest] reason: Option<String>,
 ) -> Result<(), crate::DynError> {
     let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
 
@@ -418,7 +418,7 @@ pub async fn unmute(
     ctx: crate::Context<'_>,
     #[description = "User to mute"] user: serenity_prelude::User,
     #[description = "Length of the mute"] length: Option<humantime::Duration>,
-    #[description = "Reason for mute"] reason: Option<String>,
+    #[description = "Reason for mute"] #[rest] reason: Option<String>,
 ) -> Result<(), crate::DynError> {
     let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
 
