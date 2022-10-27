@@ -10,7 +10,7 @@ use poise::serenity_prelude;
 
 
 
-/// Ban a user for a specified amount of time
+/// Ban a user (with an optional specified time)
 #[poise::command(
     prefix_command,
     slash_command,
@@ -37,11 +37,14 @@ pub async fn ban(
     let dm_channel = user.create_dm_channel(&ctx.discord().http).await?;
 
     send_moderation_messages(
-        &ctx.discord(), 
+        &ctx, 
         &dm_channel, 
-        &append_expiry_date(&format!("You have been banned from **{}**", user.id.as_u64()), expiry_date),
+        &append_expiry_date(&format!("You have been banned from **{}**", 
+            &guild_id.name(&ctx.discord().cache).expect("Failed to get guild name!")), 
+            expiry_date
+        ),
         colors::RED, 
-        &ctx.channel_id(), 
+        "Zap!", 
         &append_expiry_date(&format!("User <@{}> has been banned", user.id.as_u64()), expiry_date),
         colors::GREEN,
         &format!(
@@ -52,7 +55,15 @@ pub async fn ban(
         reason.as_deref()
     ).await?;
 
-    database::add_moderation(&ctx.data(), guild_id, user.id, ModerationType::Ban, administered_at, expiry_date, reason.as_deref()).await?;
+    database::add_moderation(
+        &ctx.data().database, 
+        guild_id, 
+        user.id, 
+        ModerationType::Ban, 
+        administered_at, 
+        expiry_date, 
+        reason.as_deref()
+    ).await?;
 
     if let Some(reason) = &reason {
         guild_id.ban_with_reason(&ctx.discord().http, &user.id, 0, &reason).await?;
@@ -64,15 +75,67 @@ pub async fn ban(
 }
 
 fn ban_help() -> String {
-    "Ban a user for a specified amount of time".to_string()
+    String::from("Kick a user from the server.
+Example: %ban @Joshument#0001 10s joined 10 seconds too early
+        ")
 }
 
+/// Unban a user (with an optional specified time)
+#[poise::command(
+    prefix_command,
+    slash_command,
+    required_permissions = "BAN_MEMBERS",
+    required_bot_permissions = "BAN_MEMBERS",
+    help_text_fn = "unban_help",
+    category = "moderation",
+)]
+pub async fn unban(
+    ctx: crate::Context<'_>,
+    #[description = "User to unban"] user: serenity_prelude::User,
+    #[description = "Reason for the unban"] reason: Option<String>,
+) -> Result<(), crate::DynError> {
+    let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
+    // let administered_at = ctx.created_at();
+
+    let dm_channel = user.create_dm_channel(&ctx.discord().http).await?;
+
+    send_moderation_messages(
+        &ctx, 
+        &dm_channel, 
+        &format!("You have been unbanned from **{}**",
+            &guild_id.name(&ctx.discord().cache).expect("Failed to get guild name!")
+        ),
+        colors::GREEN, 
+        "!paZ", 
+        &format!("User <@{}> has been unbanned", user.id.as_u64()),
+        colors::GREEN,
+        &format!(
+            "I was unable to DM <@{}> about their moderation.", 
+            user.id.as_u64()
+        ), 
+        colors::RED, 
+        reason.as_deref()
+    ).await?;
+
+    guild_id.unban(&ctx.discord().http, &user.id).await?;
+    database::clear_moderations(&ctx.data().database, guild_id.0 as i64, user.id.0 as i64, ModerationType::Ban).await?;
+
+    Ok(())
+}
+
+fn unban_help() -> String {
+    String::from("Unban a user from the server.
+Example: %unban @Joshument#0001 my perspective of you has changed
+        ")
+}
+
+/// Kick a user
 #[poise::command(
     prefix_command,
     slash_command,
     required_permissions = "KICK_MEMBERS",
     required_bot_permissions = "KICK_MEMBERS",
-    help_text_fn = "ban_help",
+    help_text_fn = "kick_help",
     category = "moderation",
 )]
 pub async fn kick(
@@ -86,14 +149,14 @@ pub async fn kick(
     let dm_channel = user.create_dm_channel(&ctx.discord().http).await?;
 
     send_moderation_messages(
-        &ctx.discord(), 
+        &ctx, 
         &dm_channel, 
         &format!(
             "You have been kicked from **{}**!", 
             guild_id.name(&ctx.discord().cache).expect("Failed to get guild name!").as_str(),
         ), 
         colors::RED, 
-        &ctx.channel_id(), 
+        "Zap!", 
         &format!("User <@{}> has been kicked", user.id.as_u64()), 
         colors::GREEN,
         &format!(
@@ -104,7 +167,15 @@ pub async fn kick(
         reason.as_deref()
     ).await?;
 
-    database::add_moderation(&ctx.data(), guild_id, user.id, ModerationType::Kick, administered_at, None, reason.as_deref()).await?;
+    database::add_moderation(
+        &ctx.data().database, 
+        guild_id, 
+        user.id, 
+        ModerationType::Kick, 
+        administered_at, 
+        None, 
+        reason.as_deref()
+    ).await?;
 
     if let Some(reason) = &reason {
         guild_id.kick_with_reason(&ctx.discord().http, user.id, &reason).await?;
@@ -115,19 +186,26 @@ pub async fn kick(
     Ok(())
 }
 
+fn kick_help() -> String {
+    String::from("Kick a user from the server.
+Example: %kick @Joshument#0001 nerd
+    ")
+}
+
+/// Timeout a user for a specified amount of time
 #[poise::command(
     prefix_command,
     slash_command,
     required_permissions = "MODERATE_MEMBERS",
     required_bot_permissions = "MODERATE_MEMBERS",
-    help_text_fn = "ban_help",
+    help_text_fn = "timeout_help",
     category = "moderation",
 )]
 pub async fn timeout(
     ctx: crate::Context<'_>,
-    #[description = "User to ban"] user: serenity_prelude::User,
-    #[description = "Length of the ban"] length: humantime::Duration,
-    #[description = "Reason for ban"] reason: Option<String>,
+    #[description = "User to timeout"] user: serenity_prelude::User,
+    #[description = "Length of the timeout"] length: humantime::Duration,
+    #[description = "Reason for timeout"] reason: Option<String>,
 ) -> Result<(), crate::DynError> {
     let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
     let administered_at = ctx.created_at();
@@ -161,11 +239,14 @@ pub async fn timeout(
     }
 
     send_moderation_messages(
-        &ctx.discord(), 
+        &ctx, 
         &dm_channel, 
-        &format!("You have been timed out from **{}** until <t:{}:F>", user.id.as_u64(), expiry_date.unix_timestamp()),
+        &format!("You have been timed out from **{}** until <t:{}:F>", 
+            guild_id.name(&ctx.discord().cache).expect("Failed to get guild name!"), 
+            expiry_date.unix_timestamp()
+        ),
         colors::RED, 
-        &ctx.channel_id(), 
+        "Zap!", 
         &format!("User <@{}> has been timed out until <t:{}:F>", user.id.as_u64(), expiry_date.unix_timestamp()),
         colors::GREEN,
         &format!(
@@ -176,7 +257,72 @@ pub async fn timeout(
         reason.as_deref()
     ).await?;
 
-    database::add_moderation(&ctx.data(), guild_id, user.id, ModerationType::Ban, administered_at, Some(expiry_date), reason.as_deref()).await?;
+    database::add_moderation(
+        &ctx.data().database, 
+        guild_id, 
+        user.id, 
+        ModerationType::Timeout, 
+        administered_at, 
+        Some(expiry_date), 
+        reason.as_deref()
+    ).await?;
 
     Ok(())
+}
+
+fn timeout_help() -> String {
+    String::from("Time out a user from the server.
+Example: %timeout @Paze#2936 10m not a fan of the inconsistencies
+            ")
+}
+
+/// Revoke the timeout for a user
+#[poise::command(
+    prefix_command,
+    slash_command,
+    required_permissions = "MODERATE_MEMBERS",
+    required_bot_permissions = "MODERATE_MEMBERS",
+    help_text_fn = "untimeout_help",
+    category = "moderation",
+    aliases("revoketimeout")
+)]
+pub async fn untimeout(
+    ctx: crate::Context<'_>,
+    #[description = "User to untimeout"] user: serenity_prelude::User,
+    #[description = "Reason for the untimeout"] reason: Option<String>,
+) -> Result<(), crate::DynError> {
+    let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
+
+    let dm_channel = user.create_dm_channel(&ctx.discord().http).await?;
+    database::clear_moderations(&ctx.data().database, guild_id.0 as i64, user.id.0 as i64, ModerationType::Timeout).await?;
+
+    guild_id
+        .member(&ctx.discord().http, &user.id).await?
+        .enable_communication(&ctx.discord().http).await?;
+
+    send_moderation_messages(
+        &ctx, 
+        &dm_channel, 
+        &format!("You have been untimed out from **{}**",
+            &guild_id.name(&ctx.discord().cache).expect("Failed to get guild name!")
+        ),
+        colors::GREEN, 
+        "!paZ", 
+        &format!("User <@{}> has been untimed out", user.id.as_u64()),
+        colors::GREEN,
+        &format!(
+            "I was unable to DM <@{}> about their moderation.", 
+            user.id.as_u64()
+        ), 
+        colors::RED, 
+        reason.as_deref()
+    ).await?;
+
+    Ok(())
+}
+
+fn untimeout_help() -> String {
+    String::from("Revoke the timeoutout a user.
+Example: %untimeout @Paze#2936 fan of the consistencies :)
+            ")
 }

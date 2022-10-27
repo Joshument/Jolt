@@ -2,13 +2,14 @@ mod commands;
 mod database;
 mod colors;
 
+use std::sync::Arc;
 use std::{fs, time::Instant};
 use std::error::Error;
-use std::collections::HashSet;
 
+use commands::moderation::types::ModerationType;
 // use commands::moderation::types::ModerationType;
 use poise::{serenity_prelude, PrefixFrameworkOptions};
-use serenity_prelude::{http::Http, GatewayIntents};
+use serenity_prelude::GatewayIntents;
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite;
 
@@ -44,7 +45,7 @@ impl serenity_prelude::EventHandler for Handler {
 }
 
 pub struct Data {
-    database: sqlx::SqlitePool,
+    database: Arc<sqlx::SqlitePool>,
     uptime: Instant,
 }
 
@@ -60,27 +61,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .max_connections(20)
         .connect_with(
             sqlite::SqliteConnectOptions::new()
-                .filename(config.database)
+                .filename(&config.database)
                 .create_if_missing(true)
         )
         .await
         .expect("Couldn't connect to the database!");
 
-    sqlx::migrate!("./migrations").run(&database).await.expect("Couldn't run database migrations!");
-
-    let http = Http::new(&config.token);
-
-    // Get bot owners and bot id
-    let (owners, _bot_id) = match http.get_current_application_info().await {
-        Ok(info) => {
-            let mut owners = HashSet::new();
-            owners.insert(info.owner.id);
-
-            (owners, info.id)
-        },
-        Err(why) => panic!("Could not access application info: {:?}", why)
-    };
-
+    sqlx::migrate!("./../migrations").run(&database).await.expect("Couldn't run database migrations!");
     /*
     let framework =
         StandardFramework::new()
@@ -99,8 +86,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 ping(),
                 info(),
                 ban(),
+                unban(),
                 kick(),
-                timeout()
+                timeout(),
+                untimeout()
             ],
             prefix_options: PrefixFrameworkOptions {
                 prefix: Some(config.prefix),
@@ -121,7 +110,50 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         b
                     }).await?;
 
-                    // let guild_id = serenity_prelude::GuildId(1033905219257516032);
+                    /*
+                    let guild_id = serenity_prelude::GuildId(1033905219257516032);
+                    guild_id.set_application_commands(&ctx.http, |b| b).await?;
+                    */
+                    let database = std::sync::Arc::new(database);
+                    let moderations_database = database.clone();
+                    let moderations_ctx = ctx.clone();
+                    tokio::spawn(async move {
+                        loop {
+                            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                
+                            let current_time = serenity_prelude::Timestamp::now().unix_timestamp();
+                
+                            let entries = sqlx::query!(
+                                "SELECT guild_id, user_id, moderation_type FROM moderations WHERE expiry_date < ? AND active = TRUE",
+                                current_time
+                            )
+                                .fetch_all(&*moderations_database) 
+                                .await
+                                .expect("Failed to get current moderations!");
+                
+                            sqlx::query!(
+                                "UPDATE moderations SET active = FALSE WHERE expiry_date < ?",
+                                current_time
+                            )
+                                .execute(&*moderations_database)
+                                .await
+                                .expect("Failed to write to database!");
+                
+                            for entry in entries {
+                                let guild_id = serenity_prelude::GuildId(entry.guild_id as u64);
+                                let user_id = serenity_prelude::UserId(entry.user_id as u64);
+                                let moderation_type: ModerationType = (entry.moderation_type as u8).try_into()
+                                    .expect("Failed to convert moderation_type into ModerationType enum!");
+                
+                                match moderation_type {
+                                    ModerationType::Ban => guild_id.unban(&moderations_ctx.http, user_id).await
+                                        .expect(format!("Failed to unban user {} from {}", user_id, guild_id).as_str()),
+                                    ModerationType::Mute => unimplemented!(),
+                                    _ => () // Either there is no timed event, or the event has a built-in expiry (timeout)
+                                }
+                            }
+                        }
+                    });
 
                     Ok(Data {
                         database,
@@ -172,49 +204,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
         }
     });
-
-    let moderations_database = database::get_database(&client.data).await;
-    tokio::spawn(async move {
-        loop {
-            tokio::time::sleep(Duration::from_secs(5)).await;
-
-            let current_time = Timestamp::now().unix_timestamp();
-
-            let entries = sqlx::query!(
-                "SELECT guild_id, user_id, moderation_type FROM moderations WHERE expiry_date < ? AND active = TRUE",
-                current_time
-            )
-                .fetch_all(&*moderations_database) 
-                .await
-                .expect("Failed to get current moderations!");
-
-            sqlx::query!(
-                "UPDATE moderations SET active = FALSE WHERE expiry_date < ?",
-                current_time
-            )
-                .execute(&*moderations_database)
-                .await
-                .expect("Failed to write to database!");
-
-            for entry in entries {
-                let guild_id = GuildId(entry.guild_id as u64);
-                let user_id = UserId(entry.user_id as u64);
-                let moderation_type: ModerationType = (entry.moderation_type as u8).try_into()
-                    .expect("Failed to convert moderation_type into ModerationType enum!");
-
-                match moderation_type {
-                    ModerationType::Ban => guild_id.unban(&http, user_id).await
-                        .expect(format!("Failed to unban user {} from {}", user_id, guild_id).as_str()),
-                    ModerationType::Mute => unimplemented!(),
-                    _ => () // Either there is no timed event, or the event has a built-in expiry (timeout)
-                }
-            }
-        }
-    });
-
-    if let Err(why) = client.start_autosharded().await {
-        println!("Client error: {:?}", why);
-    }
     */
 
     Ok(())
