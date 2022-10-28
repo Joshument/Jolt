@@ -480,3 +480,64 @@ fn unmute_help() -> String {
 Example: %mute @Joshument#0001 3d keeps procrastinating on the modlogs command
         ")
 }
+
+
+/// Get the mod logs for a specified user
+#[poise::command(
+    prefix_command,
+    slash_command,
+    required_permissions = "MODERATE_MEMBERS",
+    required_bot_permissions = "MANAGE_ROLES",
+    help_text_fn = "modlogs_help",
+    category = "moderation",
+)]
+pub async fn modlogs(
+    ctx: crate::Context<'_>,
+    #[description = "User to get modlogs from"] user: serenity_prelude::User,
+    #[description = "Modlogs page"] page: usize,
+) -> Result<(), crate::DynError> {
+    let modlog_page = database::get_modlog_page(
+        &ctx.data().database, 
+        ctx.guild_id().expect("Failed to get guild id!"), 
+        user.id, 
+        page, 
+        10
+    ).await?;
+
+    ctx.send(|m| m
+        .embed(|e| {
+            for modlog in modlog_page {
+                e.field(
+                    format!("ID {}", modlog.id),
+                    format!(
+                        "{}{}{}{}",
+                        format!(
+                            "**Type:** {}",
+                            modlog.moderation_type,
+                        ),
+                        format!("\n**Administered At:** <t:{}:F>", modlog.administered_at.unix_timestamp()),
+                        match modlog.reason {
+                            Some(reason) => format!("\n**Reason:** {}", reason),
+                            None => String::new(),
+                        },
+                        match modlog.expiry_date {
+                            Some(expiration) => format!("\n**Expires:** <t:{}:F>", expiration.unix_timestamp()),
+                            None => String::new()
+                        }
+                    ),
+                    false
+                );
+            }
+
+            e
+        })
+    ).await?;
+
+    Ok(())
+}
+
+fn modlogs_help() -> String {
+    String::from("Get the mod logs for the specified user.
+Example: %modlogs @Joshument#0001 1
+        ")
+}

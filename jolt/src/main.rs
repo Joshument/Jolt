@@ -126,6 +126,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 untimeout(),
                 mute(),
                 unmute(),
+                modlogs(),
 
                 // Configuration
                 mute_role(),

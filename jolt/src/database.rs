@@ -1,7 +1,7 @@
 use poise::serenity_prelude::{self, ChannelId};
 use serenity_prelude::{GuildId, UserId, RoleId, Timestamp};
 
-use crate::commands::moderation::types::ModerationType;
+use crate::commands::moderation::types::{ModerationType, ModlogEntry, PageOutOfBounds};
 
 /// Sets all existing moderations of the type `moderation_type` to inactive.
 /// This has to take `i64` for the guild_id and user_id as SQLite does not support unsigned 64-bit numbers.
@@ -36,8 +36,8 @@ pub async fn add_moderation(
     expiry_date: Option<Timestamp>,
     reason: Option<&str>,
 ) -> sqlx::Result<()> {
-    let guild_id = guild_id.into().0 as i64;
-    let user_id = user_id.into().0 as i64;
+    let guild_id_i64 = guild_id.into().0 as i64;
+    let user_id_i64 = user_id.into().0 as i64;
     let moderation_type_u8 = moderation_type as u8;
     let expiry_date = expiry_date.map(|date| date.unix_timestamp());
     let administered_at = administered_at.unix_timestamp();
@@ -50,13 +50,13 @@ pub async fn add_moderation(
     // Bans, Mutes, and Timeouts should only occur once per guild per member
     // This is to prevent double expiries, which could cause unexpected unban times
     if let ModerationType::Ban | ModerationType::Mute | ModerationType::Timeout = moderation_type {
-        clear_moderations(&database, guild_id, user_id, moderation_type).await?;
+        clear_moderations(&database, guild_id_i64, user_id_i64, moderation_type).await?;
     }
 
     sqlx::query!(
         "INSERT INTO moderations (guild_id, user_id, moderation_type, administered_at, expiry_date, reason, active) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        guild_id,
-        user_id,
+        guild_id_i64,
+        user_id_i64,
         moderation_type_u8,
         administered_at,
         expiry_date,
@@ -157,4 +157,63 @@ pub async fn get_logs_channel(
         Some(channel_id) => Ok(Some(ChannelId(channel_id as u64))),
         None => Ok(None)
     }
+}
+
+pub async fn get_modlog_count(
+    database: &sqlx::SqlitePool,
+    guild_id: impl Into<GuildId>,
+    user_id: impl Into<UserId>,
+) -> Result<usize, crate::DynError> {
+    let guild_id_i64 = guild_id.into().0 as i64;
+    let user_id_i64 = user_id.into().0 as i64; 
+
+    let query_count = sqlx::query!(
+        "SELECT * FROM moderations WHERE guild_id=? AND user_id=?",
+        guild_id_i64,
+        user_id_i64
+    )
+        .fetch_all(database)
+        .await?
+        .len();
+
+    Ok(query_count)
+}
+
+pub async fn get_modlog_page(
+    database: &sqlx::SqlitePool,
+    guild_id: impl Into<GuildId> + Copy,
+    user_id: impl Into<UserId> + Copy,
+    page: usize,
+    page_size: usize
+) -> Result<Vec<ModlogEntry>, crate::DynError> {
+    let guild_id_i64 = guild_id.into().0 as i64;
+    let user_id_i64 = user_id.into().0 as i64;
+    let query_count = get_modlog_count(database, guild_id, user_id).await?;
+    let page_size_i64 = page_size as i64;
+    let offset: i64 = (page * page_size - page_size).try_into()?;
+
+    if query_count < page * page_size - page_size {
+        return Err(Box::new(PageOutOfBounds(1, 1)));
+    }
+
+    let modlogs_raw = sqlx::query!(
+        "SELECT * FROM moderations WHERE guild_id=? AND user_id=? LIMIT ? OFFSET ?",
+        guild_id_i64,
+        user_id_i64,
+        page_size_i64,
+        offset
+    )
+    .fetch_all(database)
+    .await?;
+
+    let modlogs = modlogs_raw.iter().map(|modlog| ModlogEntry {
+        id: modlog.id.unwrap_or(0) as u64,
+        moderation_type: (modlog.moderation_type as u8).try_into().unwrap(),
+        administered_at: serenity_prelude::Timestamp::from_unix_timestamp(modlog.administered_at).unwrap(),
+        expiry_date: modlog.expiry_date.map(|some| serenity_prelude::Timestamp::from_unix_timestamp(some).unwrap()),
+        reason: modlog.reason.clone(),
+        active: modlog.active,
+    }).collect();
+
+    Ok(modlogs)
 }
