@@ -1,4 +1,4 @@
-use poise::serenity_prelude;
+use poise::serenity_prelude::{self, ChannelId};
 use serenity_prelude::{GuildId, UserId, RoleId, Timestamp};
 
 use crate::commands::moderation::types::ModerationType;
@@ -100,10 +100,61 @@ pub async fn get_mute_role(
         guild_id_i64
     )
         .fetch_one(database)
-        .await?;
+        .await;
+
+    if let Err(_) = entry {
+        return Ok(None);
+    }
+
+    let entry = entry?;
     
     match entry.mute_role_id {
         Some(role_id) => Ok(Some(RoleId(role_id as u64))),
+        None => Ok(None)
+    }
+}
+
+pub async fn set_logs_channel(
+    database: &sqlx::SqlitePool,
+    guild_id: impl Into<GuildId>,
+    channel_id: impl Into<ChannelId>,
+) -> sqlx::Result<()> {
+    let guild_id_i64 = guild_id.into().0 as i64;
+    let channel_id_i64 = channel_id.into().0 as i64;
+    
+    sqlx::query!(
+        "INSERT INTO guild_settings (guild_id, logs_channel_id) VALUES ($1, $2)
+        ON CONFLICT (guild_id) DO UPDATE SET logs_channel_id=excluded.logs_channel_id",
+        guild_id_i64,
+        channel_id_i64
+    )
+    .execute(&*database)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn get_logs_channel(
+    database: &sqlx::SqlitePool,
+    guild_id: impl Into<GuildId>,
+) -> sqlx::Result<Option<ChannelId>> {
+    let guild_id_i64 = guild_id.into().0 as i64;
+
+    let entry = sqlx::query!(
+        "SELECT logs_channel_id FROM guild_settings WHERE guild_id=?",
+        guild_id_i64
+    )
+        .fetch_one(database)
+        .await;
+    
+    if let Err(_) = entry {
+        return Ok(None);
+    }
+
+    let entry = entry?;
+    
+    match entry.logs_channel_id {
+        Some(channel_id) => Ok(Some(ChannelId(channel_id as u64))),
         None => Ok(None)
     }
 }

@@ -344,17 +344,12 @@ pub async fn mute(
 
     let mute_role = database::get_mute_role(&ctx.data().database, guild_id).await?;
     if let None = mute_role {
-        ctx.send(|m| m
-            .embed(|e| e
-                .color(colors::RED)
-                .description("Mute role has not been set! Please set the mute role using %muterole")
-            )
-        ).await?;
+        return Err(Box::new(types::ConfigNotSetError(String::from("%muterole"))))
     }
 
     let administered_at = ctx.created_at();
     // Replaces Option<Duration> into Option<Timestamp>
-    // .transpose()? brings out the inner result propagate upstream with `?`
+    // .transpose()? brings out the inner result to propagate upstream with `?`
     // Using `?` inside of .map() would instead return it to the closure, therefore making it invalid.
     let expiry_date = length.map(|duration| 
         serenity_prelude::Timestamp::from_unix_timestamp(administered_at.unix_timestamp() + duration.as_secs() as i64)

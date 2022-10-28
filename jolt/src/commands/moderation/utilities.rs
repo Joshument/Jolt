@@ -1,5 +1,8 @@
 use poise::serenity_prelude;
 
+use crate::database;
+use crate::colors;
+
 // This function saves a lot of repeated embeds that would be used in multiple contexts with slightly different values.
 pub async fn send_moderation_messages(
     ctx: &crate::Context<'_>,
@@ -48,10 +51,29 @@ pub async fn send_moderation_messages(
         }).await?;
     }
 
+    let guild_id = ctx.guild_id().expect("Failed to get guild id from context!");
+    let logs_channel = database::get_logs_channel(&ctx.data().database, guild_id).await?;
+
+    if let Some(channel) = logs_channel {
+        channel.send_message(&ctx.discord().http, |m| m
+            .embed(|e| { e 
+                .color(colors::BLUE)
+                .title("INFO")
+                .description(message);
+
+            if let Some(reason) = &reason {
+                e.field("Reason:", &reason, false);
+            }
+        
+            e
+        })
+        ).await?;
+    }
+
     Ok(())
 }
 
-/// Appends the expiry date (if exists)
+/// Appends the expiry date (if exists).
 /// Function exists to reduce boilerplate
 pub fn append_expiry_date(message: &str, expiry_date: Option<serenity_prelude::Timestamp>) -> String {
     match expiry_date {

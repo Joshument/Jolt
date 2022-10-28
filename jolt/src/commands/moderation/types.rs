@@ -9,6 +9,19 @@ impl std::fmt::Display for IntEnumError {
     }
 }
 
+/// An error representing a missing config.
+/// Contains one value, which is the config option that is not set.
+#[derive(Debug, Clone)]
+pub struct ConfigNotSetError(pub String);
+
+impl std::error::Error for ConfigNotSetError {}
+
+impl std::fmt::Display for ConfigNotSetError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "config `{}` is not set!", self.0)
+    }
+}
+
 #[derive(Copy, Clone)]
 #[repr(u8)]
 #[allow(dead_code)] // some values are going to be used later, no need to have useless warnings

@@ -8,7 +8,7 @@ use std::error::Error;
 
 use commands::moderation::types::ModerationType;
 // use commands::moderation::types::ModerationType;
-use poise::{serenity_prelude, PrefixFrameworkOptions};
+use poise::{serenity_prelude, PrefixFrameworkOptions, BoxFuture};
 use serenity_prelude::GatewayIntents;
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite;
@@ -52,6 +52,36 @@ pub struct Data {
 
 pub type DynError = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, DynError>;
+pub type FrameworkError<'a> = poise::FrameworkError<'a, Data, DynError>;
+
+async fn on_error(err: crate::FrameworkError<'_>) {
+    let error_message = match &err {
+        poise::FrameworkError::Command  {error, ..}
+        | poise::FrameworkError::ArgumentParse {error, ..} => error.to_string(),
+        poise::FrameworkError::MissingUserPermissions { missing_permissions, .. } => {
+            format!(
+                "You do not have the permissions{} to run this command!",
+                format!(
+                    " `{}` ",
+                    if let Some(permissions) = missing_permissions {
+                        permissions.to_string()
+                    } else {
+                        String::new()
+                    }
+                )
+            )
+        }
+        _ => String::from("error is not intentional; please send this to the developers (/info)")
+    };
+
+    err.ctx().expect("Failed to get context of error!").send(|m| m
+        .embed(|e| e
+            .color(colors::RED)
+                .field("Error!", error_message, false)
+        )
+    ).await.expect("Failed to send the error message!");
+}
+
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -99,11 +129,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                 // Configuration
                 mute_role(),
+                logs_channel(),
             ],
             prefix_options: PrefixFrameworkOptions {
                 prefix: Some(config.prefix),
                 ..Default::default()
             },
+            on_error: |error| Box::pin(on_error(error)),
             ..Default::default()
         })
         .token(config.token)
@@ -140,14 +172,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                 .await
                                 .expect("Failed to get current moderations!");
                 
-                            sqlx::query!(
-                                "UPDATE moderations SET active = FALSE WHERE expiry_date < ?",
-                                current_time
-                            )
-                                .execute(&*moderations_database)
-                                .await
-                                .expect("Failed to write to database!");
-                
                             for entry in entries {
                                 let guild_id = serenity_prelude::GuildId(entry.guild_id as u64);
                                 let user_id = serenity_prelude::UserId(entry.user_id as u64);
@@ -168,6 +192,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                     _ => () // Either there is no timed event, or the event has a built-in expiry (timeout)
                                 }
                             }
+
+                            sqlx::query!(
+                                "UPDATE moderations SET active = FALSE WHERE expiry_date < ?",
+                                current_time
+                            )
+                                .execute(&*moderations_database)
+                                .await
+                                .expect("Failed to write to database!");
                         }
                     });
 
