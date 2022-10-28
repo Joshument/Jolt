@@ -26,6 +26,11 @@ pub async fn warn(
     let moderator = ctx.author();
     let administered_at = ctx.created_at();
 
+    let member = guild_id.member(&ctx.discord(), user.id).await?;
+    if is_member_moderator(&ctx.discord().cache, &member)? {
+        return Err(Box::new(MemberIsModerator(member)));
+    }
+
     let dm_channel = user.create_dm_channel(&ctx.discord().http).await?;
 
     send_moderation_messages(
@@ -191,6 +196,12 @@ pub async fn ban(
         serenity_prelude::Timestamp::from_unix_timestamp(administered_at.unix_timestamp() + duration.as_secs() as i64)
     ).transpose()?;
 
+    let member = guild_id.member(&ctx.discord(), user.id).await?;
+    if is_member_moderator(&ctx.discord().cache, &member)? {
+        return Err(Box::new(MemberIsModerator(member)));
+    }
+
+
     let dm_channel = user.create_dm_channel(&ctx.discord().http).await?;
 
     send_moderation_messages(
@@ -305,6 +316,12 @@ pub async fn kick(
     let moderator = ctx.author();
     let administered_at = ctx.created_at();
 
+    let member = guild_id.member(&ctx.discord(), user.id).await?;
+    if is_member_moderator(&ctx.discord().cache, &member)? {
+        return Err(Box::new(MemberIsModerator(member)));
+    }
+
+
     let dm_channel = user.create_dm_channel(&ctx.discord()).await?;
 
     send_moderation_messages(
@@ -374,7 +391,6 @@ pub async fn timeout(
         serenity_prelude::Timestamp::from_unix_timestamp(administered_at.unix_timestamp() + length.as_secs() as i64)?;
 
     let dm_channel = user.create_dm_channel(&ctx.discord()).await?;
-
 
     // start with the timeout to see if the specified time is over 28d or not
     let successful_timeout = guild_id
@@ -506,6 +522,11 @@ pub async fn mute(
 ) -> Result<(), crate::DynError> {
     let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
     let moderator = ctx.author();
+
+    let member = guild_id.member(&ctx.discord(), user.id).await?;
+    if is_member_moderator(&ctx.discord().cache, &member)? {
+        return Err(Box::new(MemberIsModerator(member)));
+    }
 
     let mute_role = database::get_mute_role(&ctx.data().database, guild_id).await?;
     if let None = mute_role {

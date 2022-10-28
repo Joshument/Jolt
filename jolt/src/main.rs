@@ -60,7 +60,7 @@ async fn on_error(err: crate::FrameworkError<'_>) {
         | poise::FrameworkError::ArgumentParse {error, ..} => error.to_string(),
         poise::FrameworkError::MissingUserPermissions { missing_permissions, .. } => {
             format!(
-                "You do not have the permissions{} to run this command!",
+                "You do not have the permission(s){} to run this command!",
                 format!(
                     " `{}` ",
                     if let Some(permissions) = missing_permissions {

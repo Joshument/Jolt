@@ -8,7 +8,7 @@ use crate::colors;
 #[poise::command(
     prefix_command,
     slash_command,
-    required_permissions = "ADMINISTRATOR",
+    required_permissions = "MANAGE_GUILD",
     help_text_fn = "mute_role_help",
     category = "moderation",
     rename = "muterole"
@@ -48,7 +48,7 @@ Example: %muterole @Muted
 #[poise::command(
     prefix_command,
     slash_command,
-    required_permissions = "ADMINISTRATOR",
+    required_permissions = "MANAGE_GUILD",
     help_text_fn = "logs_channel_help",
     category = "moderation",
     rename = "logschannel"

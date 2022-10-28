@@ -116,3 +116,16 @@ impl std::fmt::Display for PageOutOfBounds {
         write!(f, "attempted to access page {} when maximum page is {}", self.0, self.1)
     }
 }
+
+/// An error representing that the member being moderated is a moderator.
+/// Contains one vaue, which is the member that is the moderator.
+#[derive(Debug, Clone)]
+pub struct MemberIsModerator(pub serenity_prelude::Member);
+
+impl std::error::Error for MemberIsModerator {}
+
+impl std::fmt::Display for MemberIsModerator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "user <@{}> is a moderator!", self.0.user.id.0,)
+    }
+}
