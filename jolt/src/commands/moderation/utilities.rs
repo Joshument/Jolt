@@ -86,23 +86,6 @@ pub fn append_expiry_date(message: &str, expiry_date: Option<serenity_prelude::T
     }
 }
 
-const MODERATOR_PERMISSIONS: [serenity_prelude::permissions::Permissions; 14] = [
-    serenity_prelude::permissions::Permissions::KICK_MEMBERS,
-    serenity_prelude::permissions::Permissions::BAN_MEMBERS,
-    serenity_prelude::permissions::Permissions::ADMINISTRATOR,
-    serenity_prelude::permissions::Permissions::MANAGE_CHANNELS,
-    serenity_prelude::permissions::Permissions::MANAGE_GUILD,
-    serenity_prelude::permissions::Permissions::MANAGE_MESSAGES,
-    serenity_prelude::permissions::Permissions::MUTE_MEMBERS,
-    serenity_prelude::permissions::Permissions::DEAFEN_MEMBERS,
-    serenity_prelude::permissions::Permissions::MOVE_MEMBERS,
-    serenity_prelude::permissions::Permissions::MANAGE_NICKNAMES,
-    serenity_prelude::permissions::Permissions::MANAGE_ROLES,
-    serenity_prelude::permissions::Permissions::MANAGE_WEBHOOKS,
-    serenity_prelude::permissions::Permissions::MANAGE_THREADS,
-    serenity_prelude::permissions::Permissions::MODERATE_MEMBERS,
-];
-
 pub fn is_member_moderator(
     cache: &serenity_prelude::Cache,
     member: &serenity_prelude::Member

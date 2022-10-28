@@ -8,7 +8,7 @@ use std::error::Error;
 
 use commands::moderation::types::ModerationType;
 // use commands::moderation::types::ModerationType;
-use poise::{serenity_prelude, PrefixFrameworkOptions, BoxFuture};
+use poise::{serenity_prelude, PrefixFrameworkOptions};
 use serenity_prelude::GatewayIntents;
 use serde::{Deserialize, Serialize};
 use sqlx::sqlite;
@@ -99,15 +99,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .expect("Couldn't connect to the database!");
 
     sqlx::migrate!("./../migrations").run(&database).await.expect("Couldn't run database migrations!");
-    /*
-    let framework =
-        StandardFramework::new()
-        .configure(|c| c.owners(owners).prefix(config.prefix))
-        .group(&GENERAL_GROUP)
-        .group(&MODERATORS_GROUP)
-        .on_dispatch_error(dispatch_error)
-        .after(after);
-    */
 
     let uptime = Instant::now();
 
@@ -216,47 +207,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         );
 
     framework.run_autosharded().await?;
-
-    /*
-    let intents = GatewayIntents::GUILD_MESSAGES
-        | GatewayIntents::DIRECT_MESSAGES
-        | GatewayIntents::MESSAGE_CONTENT
-        | GatewayIntents::GUILDS;
-    let mut client = Client::builder(&config.token, intents)
-        .framework(framework)
-        .event_handler(Handler)
-        .await
-        .expect("Error creating client!");
-    {
-        let mut data = client.data.write().await;
-        data.insert::<ShardManagerContainer>(client.shard_manager.clone());
-        data.insert::<database::Database>(Arc::new(database));
-        data.insert::<commands::meta::Uptime>(Arc::new(uptime));
-    }
-
-    let shard_manager = client.shard_manager.clone();
-    tokio::spawn(async move {
-        tokio::signal::ctrl_c().await.expect("Could not register ctrl+c handler");
-        shard_manager.lock().await.shutdown_all().await;
-    });
-
-    let shard_manager = client.shard_manager.clone();
-    tokio::spawn(async move {
-        loop {
-            tokio::time::sleep(Duration::from_secs(30)).await;
-
-            let lock = shard_manager.lock().await;
-            let shard_runners = lock.runners.lock().await;
-
-            for (id, runner) in shard_runners.iter() {
-                println!(
-                    "Shard ID {} is {} with a latency of {:?}",
-                    id, runner.stage, runner.latency,
-                );
-            }
-        }
-    });
-    */
 
     Ok(())
 }

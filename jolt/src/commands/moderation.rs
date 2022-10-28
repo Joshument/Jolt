@@ -135,7 +135,7 @@ pub async fn warnings(
 
     ctx.send(|m| m
         .embed(|e| {
-            e.title(format!("Modlogs for {}",  user.name));
+            e.title(format!("Warnings for {}",  user.name));
 
             for modlog in modlog_page {
                 e.field(
