@@ -119,6 +119,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 info(),
 
                 // Moderation
+                warn(),
+                delwarn(),
+                warnings(),
                 ban(),
                 unban(),
                 kick(),

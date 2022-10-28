@@ -8,6 +8,164 @@ use crate::commands::moderation::utilities::*;
 
 use poise::serenity_prelude;
 
+
+/// Warn a user
+#[poise::command(
+    prefix_command,
+    slash_command,
+    required_permissions = "KICK_MEMBERS",
+    help_text_fn = "warn_help",
+    category = "moderation",
+)]
+pub async fn warn(
+    ctx: crate::Context<'_>,
+    #[description = "User to warn"] user: serenity_prelude::User,
+    #[description = "Reason for warning"] #[rest] reason: Option<String>,
+) -> Result<(), crate::DynError> {
+    let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
+    let moderator = ctx.author();
+    let administered_at = ctx.created_at();
+
+    let dm_channel = user.create_dm_channel(&ctx.discord().http).await?;
+
+    send_moderation_messages(
+        &ctx, 
+        &dm_channel, 
+        &format!("You have been warned in **{}**", &guild_id.name(&ctx.discord().cache).expect("Failed to get guild name!")),
+        colors::RED, 
+        "Zap!", 
+        &format!("User <@{}> has been warned", user.id.as_u64()),
+        colors::GREEN,
+        &format!(
+            "I was unable to DM <@{}> about their moderation.", 
+            user.id.as_u64()
+        ), 
+        colors::RED, 
+        reason.as_deref()
+    ).await?;
+
+    database::add_moderation(
+        &ctx.data().database, 
+        guild_id, 
+        user.id, 
+        moderator.id,
+        ModerationType::Warning, 
+        administered_at, 
+        None, 
+        reason.as_deref()
+    ).await?;
+
+    Ok(())
+}
+
+fn warn_help() -> String {
+    String::from("Warn a user in the server (with an optional reason).
+Example: %warn @Joshument#0001 I am feeling evil today
+        ")
+}
+
+/// Delete a warn from a user. Specified by ID.
+#[poise::command(
+    prefix_command,
+    slash_command,
+    required_permissions = "KICK_MEMBERS",
+    help_text_fn = "delwarn_help",
+    category = "moderation",
+)]
+pub async fn delwarn(
+    ctx: crate::Context<'_>,
+    #[description = "Modlog ID to remove"] id: u64,
+) -> Result<(), crate::DynError> {
+    let modlog = database::get_single_modlog(&ctx.data().database, id).await?;
+    
+    if modlog.guild_id != ctx.guild_id().expect("Failed to get guild id!") {
+        return Err(Box::new(ModlogNotInGuild(id, ctx.guild().expect("Failed to get guild!"))));
+    }
+
+    if modlog.moderation_type != ModerationType::Warning {
+        return Err(Box::new(NotAWarning(id)));
+    }
+
+    database::clear_single_moderation(&ctx.data().database, id).await?;
+
+    Ok(())
+}
+
+fn delwarn_help() -> String {
+    String::from("Delete a warn from a user.
+Example: %delwarn 3872
+        ")
+}
+
+/// Get the mod logs for a specified user
+#[poise::command(
+    prefix_command,
+    slash_command,
+    required_permissions = "KICK_MEMBERS",
+    help_text_fn = "warnings_help",
+    category = "moderation",
+)]
+pub async fn warnings(
+    ctx: crate::Context<'_>,
+    #[description = "User to get modlogs from"] user: serenity_prelude::User,
+    #[description = "Modlogs page"] page: Option<usize>,
+) -> Result<(), crate::DynError> {
+    let page = match page {
+        Some(page) => page,
+        None => 1
+    };
+
+    let max_page = database::get_warning_count(
+        &ctx.data().database, 
+        ctx.guild_id().expect("Failed to get guild id!"), 
+        user.id,
+    ).await? / 10 + 1;
+    let modlog_page = database::get_warning_page(
+        &ctx.data().database, 
+        ctx.guild_id().expect("Failed to get guild id!"), 
+        user.id, 
+        page, 
+        10
+    ).await?;
+
+    ctx.send(|m| m
+        .embed(|e| {
+            e.title(format!("Modlogs for {}",  user.name));
+
+            for modlog in modlog_page {
+                e.field(
+                    format!("ID {}", modlog.id),
+                    format!(
+                        "{}{}{}",
+                        format!(
+                            "\n**Moderator:** <@{}>",
+                            modlog.moderator_id
+                        ),
+                        format!("\n**Administered At:** <t:{}:F>", modlog.administered_at.unix_timestamp()),
+                        match modlog.reason {
+                            Some(reason) => format!("\n**Reason:** {}", reason),
+                            None => String::new(),
+                        },
+                    ),
+                    false
+                );
+            }
+
+            e.footer(|f| f.text(format!("Page {} of {}", page, max_page)));
+
+            e
+        })
+    ).await?;
+
+    Ok(())
+}
+
+fn warnings_help() -> String {
+    String::from("Get the warnings for the specified user.
+Example: %modlogs @Joshument#0001 1
+        ")
+}
+
 /// Ban a user (with an optional specified time)
 #[poise::command(
     prefix_command,
@@ -24,6 +182,7 @@ pub async fn ban(
     #[description = "Reason for ban"] #[rest] reason: Option<String>,
 ) -> Result<(), crate::DynError> {
     let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
+    let moderator = ctx.author();
     let administered_at = ctx.created_at();
     // Replaces Option<Duration> into Option<Timestamp>
     // .transpose()? brings out the inner result propagate upstream with `?`
@@ -57,6 +216,7 @@ pub async fn ban(
         &ctx.data().database, 
         guild_id, 
         user.id, 
+        moderator.id,
         ModerationType::Ban, 
         administered_at, 
         expiry_date, 
@@ -142,6 +302,7 @@ pub async fn kick(
     #[description = "Reason for kick"] #[rest] reason: Option<String>,
 ) -> Result<(), crate::DynError> {
     let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
+    let moderator = ctx.author();
     let administered_at = ctx.created_at();
 
     let dm_channel = user.create_dm_channel(&ctx.discord()).await?;
@@ -169,6 +330,7 @@ pub async fn kick(
         &ctx.data().database, 
         guild_id, 
         user.id, 
+        moderator.id,
         ModerationType::Kick, 
         administered_at, 
         None, 
@@ -206,6 +368,7 @@ pub async fn timeout(
     #[description = "Reason for timeout"] #[rest] reason: Option<String>,
 ) -> Result<(), crate::DynError> {
     let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
+    let moderator = ctx.author();
     let administered_at = ctx.created_at();
     let expiry_date = 
         serenity_prelude::Timestamp::from_unix_timestamp(administered_at.unix_timestamp() + length.as_secs() as i64)?;
@@ -259,6 +422,7 @@ pub async fn timeout(
         &ctx.data().database, 
         guild_id, 
         user.id, 
+        moderator.id,
         ModerationType::Timeout, 
         administered_at, 
         Some(expiry_date), 
@@ -341,6 +505,7 @@ pub async fn mute(
     #[description = "Reason for mute"] #[rest] reason: Option<String>,
 ) -> Result<(), crate::DynError> {
     let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
+    let moderator = ctx.author();
 
     let mute_role = database::get_mute_role(&ctx.data().database, guild_id).await?;
     if let None = mute_role {
@@ -380,6 +545,7 @@ pub async fn mute(
         &ctx.data().database, 
         guild_id, 
         user.id, 
+        moderator.id,
         ModerationType::Mute, 
         administered_at, 
         expiry_date, 
@@ -456,16 +622,6 @@ pub async fn unmute(
         reason.as_deref()
     ).await?;
 
-    database::add_moderation(
-        &ctx.data().database, 
-        guild_id, 
-        user.id, 
-        ModerationType::Mute, 
-        administered_at, 
-        expiry_date, 
-        reason.as_deref()
-    ).await?;
-
     database::clear_moderations(&ctx.data().database, guild_id.0 as i64, user.id.0 as i64, ModerationType::Mute).await?;
 
     let mut member = guild_id.member(&ctx.discord(), user.id).await?;
@@ -486,16 +642,25 @@ Example: %mute @Joshument#0001 3d keeps procrastinating on the modlogs command
 #[poise::command(
     prefix_command,
     slash_command,
-    required_permissions = "MODERATE_MEMBERS",
-    required_bot_permissions = "MANAGE_ROLES",
+    required_permissions = "KICK_MEMBERS",
     help_text_fn = "modlogs_help",
     category = "moderation",
 )]
 pub async fn modlogs(
     ctx: crate::Context<'_>,
     #[description = "User to get modlogs from"] user: serenity_prelude::User,
-    #[description = "Modlogs page"] page: usize,
+    #[description = "Modlogs page"] page: Option<usize>,
 ) -> Result<(), crate::DynError> {
+    let page = match page {
+        Some(page) => page,
+        None => 1
+    };
+
+    let max_page = database::get_modlog_count(
+        &ctx.data().database, 
+        ctx.guild_id().expect("Failed to get guild id!"), 
+        user.id,
+    ).await? / 10 + 1;
     let modlog_page = database::get_modlog_page(
         &ctx.data().database, 
         ctx.guild_id().expect("Failed to get guild id!"), 
@@ -506,13 +671,19 @@ pub async fn modlogs(
 
     ctx.send(|m| m
         .embed(|e| {
+            e.title(format!("Modlogs for {}",  user.name));
+
             for modlog in modlog_page {
                 e.field(
                     format!("ID {}", modlog.id),
                     format!(
-                        "{}{}{}{}",
+                        "{}{}{}{}{}{}",
                         format!(
-                            "**Type:** {}",
+                            "\n**Moderator:** <@{}>",
+                            modlog.moderator_id
+                        ),
+                        format!(
+                            "\n**Type:** {}",
                             modlog.moderation_type,
                         ),
                         format!("\n**Administered At:** <t:{}:F>", modlog.administered_at.unix_timestamp()),
@@ -523,11 +694,14 @@ pub async fn modlogs(
                         match modlog.expiry_date {
                             Some(expiration) => format!("\n**Expires:** <t:{}:F>", expiration.unix_timestamp()),
                             None => String::new()
-                        }
+                        },
+                        format!("\n**Active:** {}", modlog.active)
                     ),
                     false
                 );
             }
+
+            e.footer(|f| f.text(format!("Page {} of {}", page, max_page)));
 
             e
         })
