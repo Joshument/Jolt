@@ -71,7 +71,10 @@ pub async fn add_moderation(
     let administered_at = administered_at.unix_timestamp();
 
     let active = match moderation_type {
-        ModerationType::Kick => false,
+        ModerationType::Kick
+        | ModerationType::Unban
+        | ModerationType::Unmute
+        | ModerationType::Untimeout => false,
         _ => true
     };
 

@@ -748,6 +748,9 @@ pub async fn modlogs(
             for modlog in modlog_page {
                 e.field(
                     format!("ID {}", modlog.id),
+                    // The way I omit a certain part of the moderation is to replace the segment with an empty string.
+                    // This is because of the way that the field works, and since this involves display vs variable
+                    // checking, this is going somewhat against how you would expect this to be handled (no `Option<T>`)
                     format!(
                         "{}{}{}{}{}{}",
                         format!(
@@ -767,7 +770,13 @@ pub async fn modlogs(
                             Some(expiration) => format!("\n**Expires:** <t:{}:F>", expiration.unix_timestamp()),
                             None => String::new()
                         },
-                        format!("\n**Active:** {}", modlog.active)
+                        match modlog.moderation_type {
+                            ModerationType::Kick
+                            | ModerationType::Unban
+                            | ModerationType::Unmute
+                            | ModerationType::Untimeout => String::new(),
+                            _ => format!("\n**Active:** {}", modlog.active)
+                        }
                     ),
                     false
                 );
