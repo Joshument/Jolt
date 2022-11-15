@@ -1,4 +1,4 @@
-// guild-specific configuration
+// guild-specific configuration commands
 use poise::serenity_prelude;
 
 use crate::database;

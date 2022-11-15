@@ -1,3 +1,17 @@
+/*
+Moderation commands
+
+Probably the most important part of the server, as these are essential for managing any server at all.
+Each command follows the same sort of format:
+    - Get the guild id,
+    - Get the moderator id,
+    - Try to perform the moderation,
+    - Add moderation to modlogs and announce the moderation so the moderator knows it succeeded.
+Each command also has a required permission, and makes sure that any moderation done is not to a user
+with any form of moderative permissions. In cases of ban / unban, the permission needed is obvious,
+but when in doubt, go with KICK_MEMBERS.
+*/
+
 pub mod types;
 mod utilities;
 
@@ -288,7 +302,7 @@ pub async fn unban(
     ).await?;
 
     guild_id.unban(&ctx.discord().http, &user.id).await?;
-    database::clear_moderations(&ctx.data().database, guild_id.0 as i64, user.id.0 as i64, ModerationType::Ban).await?;
+    database::clear_moderations(&ctx.data().database, guild_id, user.id, ModerationType::Ban).await?;
 
     database::add_moderation(
         &ctx.data().database, 
@@ -486,7 +500,7 @@ pub async fn untimeout(
     let administered_at = ctx.created_at();
 
     let dm_channel = user.create_dm_channel(&ctx.discord()).await?;
-    database::clear_moderations(&ctx.data().database, guild_id.0 as i64, user.id.0 as i64, ModerationType::Timeout).await?;
+    database::clear_moderations(&ctx.data().database, guild_id, user.id, ModerationType::Timeout).await?;
 
     guild_id
         .member(&ctx.discord().http, &user.id).await?
@@ -669,7 +683,7 @@ pub async fn unmute(
         reason.as_deref()
     ).await?;
 
-    database::clear_moderations(&ctx.data().database, guild_id.0 as i64, user.id.0 as i64, ModerationType::Mute).await?;
+    database::clear_moderations(&ctx.data().database, guild_id, user.id, ModerationType::Mute).await?;
 
     let mut member = guild_id.member(&ctx.discord(), user.id).await?;
     // unwrap is safe to use here as there is already a check for `None` prior to this expression

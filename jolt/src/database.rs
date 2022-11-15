@@ -1,17 +1,23 @@
+/*
+This file provides a lot of syntatic sugar around database access to make it easier to work with the SQLite database.
+In all technicality, you don't even need to know SQL if you don't intend to touch this file. You're welcome
+*/
+
 use poise::serenity_prelude::{self, ChannelId};
 use serenity_prelude::{GuildId, UserId, RoleId, Timestamp};
 
 use crate::commands::moderation::types::{ModerationType, ModlogEntry, PageOutOfBounds};
 
-/// Sets all existing moderations of the type `moderation_type` to inactive.
-/// This has to take `i64` for the guild_id and user_id as SQLite does not support unsigned 64-bit numbers.
+/// Sets all existing moderations of the type `ModerationType` to inactive.
 pub async fn clear_moderations(
     database: &sqlx::SqlitePool,
-    guild_id: i64, 
-    user_id: i64, 
+    guild_id: impl Into<GuildId> + Clone, 
+    user_id: impl Into<UserId> + Clone, 
     moderation_type: ModerationType,
 ) -> sqlx::Result<()> {
     let moderation_type_u8 = moderation_type as u8;
+    let guild_id = guild_id.into().0 as i64;
+    let user_id = user_id.into().0 as i64;
 
     if let ModerationType::Ban | ModerationType::Mute | ModerationType::Timeout = moderation_type {
         sqlx::query!(
@@ -49,16 +55,16 @@ pub async fn clear_single_moderation(
 
 pub async fn add_moderation(
     database: &sqlx::SqlitePool,
-    guild_id: impl Into<GuildId>, 
-    user_id: impl Into<UserId>, 
+    guild_id: impl Into<GuildId> + Clone, 
+    user_id: impl Into<UserId> + Clone, 
     moderator_id: impl Into<UserId>,
     moderation_type: ModerationType,
     administered_at: Timestamp,
     expiry_date: Option<Timestamp>,
     reason: Option<&str>,
 ) -> sqlx::Result<()> {
-    let guild_id_i64 = guild_id.into().0 as i64;
-    let user_id_i64 = user_id.into().0 as i64;
+    let guild_id_i64 = guild_id.clone().into().0 as i64;
+    let user_id_i64 = user_id.clone().into().0 as i64;
     let moderator_id_64 = moderator_id.into().0 as i64;
     let moderation_type_u8 = moderation_type as u8;
     let expiry_date = expiry_date.map(|date| date.unix_timestamp());
@@ -72,7 +78,7 @@ pub async fn add_moderation(
     // Bans, Mutes, and Timeouts should only occur once per guild per member
     // This is to prevent double expiries, which could cause unexpected unban times
     if let ModerationType::Ban | ModerationType::Mute | ModerationType::Timeout = moderation_type {
-        clear_moderations(&database, guild_id_i64, user_id_i64, moderation_type).await?;
+        clear_moderations(&database, guild_id.clone(), user_id.clone(), moderation_type).await?;
     }
 
     sqlx::query!(

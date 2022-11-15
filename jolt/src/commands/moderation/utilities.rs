@@ -3,7 +3,9 @@ use poise::serenity_prelude;
 use crate::database;
 use crate::colors;
 
-// This function saves a lot of repeated embeds that would be used in multiple contexts with slightly different values.
+/// Send a moderation message using the same reusable fields.
+/// This function exists to reduce boilerplate, as it's much easier to just give a function parameters than to
+/// repeatedly regenerate the embeds every time.
 pub async fn send_moderation_messages(
     ctx: &crate::Context<'_>,
     dm_channel: &serenity_prelude::PrivateChannel,
@@ -86,12 +88,15 @@ pub fn append_expiry_date(message: &str, expiry_date: Option<serenity_prelude::T
     }
 }
 
+/// Checks if the member has any moderation related permissions.
+/// This is mostly used to determine if a moderation action can be done on the user.
 pub fn is_member_moderator(
     cache: &serenity_prelude::Cache,
     member: &serenity_prelude::Member
 ) -> Result<bool, crate::DynError> {
     let permissions = member.permissions(cache)?;
 
+    // There has to be a better way to do this I swear to god
     Ok(
         permissions.kick_members() ||
         permissions.ban_members() ||

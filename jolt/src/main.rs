@@ -17,7 +17,7 @@ use commands::meta::*;
 use commands::moderation::*;
 use commands::configuration::*;
 
-// const GIT_HASH: &str = env!("GIT_HASH");
+// This gets the current git commit hash for development builds. See the build.rs file for more information on how this is obtained.
 const VERSION: &str = concat!("git-", env!("GIT_HASH"));
 
 #[derive(Serialize, Deserialize)]
@@ -29,6 +29,8 @@ struct Config {
 
 pub struct Handler;
 
+// This handler is not super necessary right now, but it helps give a bit of information.
+// Later on, this will likely be used for other features.
 #[poise::async_trait]
 impl serenity_prelude::EventHandler for Handler {
     async fn ready(&self, _: serenity_prelude::Context, ready: serenity_prelude::Ready) {
@@ -50,12 +52,16 @@ pub struct Data {
     uptime: Instant,
 }
 
+// Some types that poise can use to make things a bit easier to use.
+// Prevents a lot of boilerplate as things like Context will always be used with the same 2 types.
 pub type DynError = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, DynError>;
 pub type FrameworkError<'a> = poise::FrameworkError<'a, Data, DynError>;
 
 async fn on_error(err: crate::FrameworkError<'_>) {
+    // Very fun way to deal wtih errors
     let error_message = match &err {
+        // IF THERE'S A BETTER WAY TO DO THIS PLEASE TELL ME THIS LOOKS TERRIBLE
         poise::FrameworkError::Command  {error, ..}
         | poise::FrameworkError::ArgumentParse {error, ..} => error.to_string(),
         poise::FrameworkError::MissingUserPermissions { missing_permissions, .. } => {
@@ -74,6 +80,7 @@ async fn on_error(err: crate::FrameworkError<'_>) {
         _ => String::from("error is not intentional; please send this to the developers (/info)")
     };
 
+    // Just sends an embed for the error instead of the message it's supposed to send
     err.ctx().expect("Failed to get context of error!").send(|m| m
         .embed(|e| e
             .color(colors::RED)
@@ -85,9 +92,12 @@ async fn on_error(err: crate::FrameworkError<'_>) {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    // Loads the config.json file for global settings (not server-specific)
     let raw_config = fs::read_to_string("./config.json")?;
     let config: Config = serde_json::from_str(&raw_config)?;
 
+    // Loads up a connection to the SQLite pool.
+    // This is one of the most crucial parts of the bot because this is necessary for persistent information.
     let database = sqlite::SqlitePoolOptions::new()
         .max_connections(20)
         .connect_with(
@@ -98,8 +108,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .await
         .expect("Couldn't connect to the database!");
 
+    // Migrations are just initial table declerations. You can find them in /migrations/.
+    // I believe that this is specifically for binary versions of the software, but I'm not 100% sure.
     sqlx::migrate!("./../migrations").run(&database).await.expect("Couldn't run database migrations!");
 
+    // Used in the info command to get the bot uptime. Declared here so that the timer starts ticking as the bot starts up
     let uptime = Instant::now();
 
     let framework = poise::Framework::builder()
@@ -153,10 +166,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     let database = std::sync::Arc::new(database);
                     let moderations_database = database.clone();
                     let moderations_ctx = ctx.clone();
+
+                    // We make a new thread to deal with timed moderations so that it can run async to the rest of the bot
                     tokio::spawn(async move {
                         loop {
-                            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                            // If the bot is lagging, try using a longer interval.
+                            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 
+                            // We sort the entires by using the current Unix time, and finding any moderation
+                            // that has an expiry date less than the current Unix time (or earlier in time).
                             let current_time = serenity_prelude::Timestamp::now().unix_timestamp();
                 
                             let entries = sqlx::query!(
@@ -206,6 +224,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
         );
 
+    // Sharding is used in larger instances to help spread out event handling.
+    // It is also necessary when your bot is in over 2500 guilds.
+    // If you are self-hosting the bot, this will likely always be only one shard.
     framework.run_autosharded().await?;
 
     Ok(())
