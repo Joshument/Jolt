@@ -61,6 +61,9 @@ pub enum ModerationType {
     Mute = 2,
     Timeout = 3,
     Ban = 4,
+    Unmute = 5,
+    Untimeout = 6,
+    Unban = 7,
 }
 
 impl TryFrom<u8> for ModerationType {
@@ -73,6 +76,9 @@ impl TryFrom<u8> for ModerationType {
             2 => Ok(ModerationType::Mute),
             3 => Ok(ModerationType::Timeout),
             4 => Ok(ModerationType::Ban),
+            5 => Ok(ModerationType::Unmute),
+            6 => Ok(ModerationType::Untimeout),
+            7 => Ok(ModerationType::Unban),
             _ => Err(IntEnumError)
         }
     }
@@ -85,7 +91,10 @@ impl std::fmt::Display for ModerationType {
             ModerationType::Kick => "Kick",
             ModerationType::Mute => "Mute",
             ModerationType::Timeout => "Timeout",
-            ModerationType::Ban => "Ban"
+            ModerationType::Ban => "Ban",
+            ModerationType::Unmute => "Unmute",
+            ModerationType::Untimeout => "Untimeout",
+            ModerationType::Unban => "Unban",
         };
         write!(f, "{}", moderation_string)
     }

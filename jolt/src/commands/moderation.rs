@@ -264,7 +264,8 @@ pub async fn unban(
     #[description = "Reason for the unban"] #[rest] reason: Option<String>,
 ) -> Result<(), crate::DynError> {
     let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
-    // let administered_at = ctx.created_at();
+    let administered_at = ctx.created_at();
+    let moderator = ctx.author();
 
     let dm_channel = user.create_dm_channel(&ctx.discord().http).await?;
 
@@ -288,6 +289,17 @@ pub async fn unban(
 
     guild_id.unban(&ctx.discord().http, &user.id).await?;
     database::clear_moderations(&ctx.data().database, guild_id.0 as i64, user.id.0 as i64, ModerationType::Ban).await?;
+
+    database::add_moderation(
+        &ctx.data().database, 
+        guild_id, 
+        user.id, 
+        moderator.id,
+        ModerationType::Unban, 
+        administered_at, 
+        None, 
+        reason.as_deref()
+    ).await?;
 
     Ok(())
 }
@@ -470,6 +482,8 @@ pub async fn untimeout(
     #[description = "Reason for the untimeout"] #[rest] reason: Option<String>,
 ) -> Result<(), crate::DynError> {
     let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
+    let moderator = ctx.author();
+    let administered_at = ctx.created_at();
 
     let dm_channel = user.create_dm_channel(&ctx.discord()).await?;
     database::clear_moderations(&ctx.data().database, guild_id.0 as i64, user.id.0 as i64, ModerationType::Timeout).await?;
@@ -493,6 +507,17 @@ pub async fn untimeout(
             user.id.as_u64()
         ), 
         colors::RED, 
+        reason.as_deref()
+    ).await?;
+
+    database::add_moderation(
+        &ctx.data().database, 
+        guild_id, 
+        user.id, 
+        moderator.id,
+        ModerationType::Untimeout, 
+        administered_at, 
+        None, 
         reason.as_deref()
     ).await?;
 
@@ -603,6 +628,7 @@ pub async fn unmute(
     #[description = "Reason for mute"] #[rest] reason: Option<String>,
 ) -> Result<(), crate::DynError> {
     let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
+    let moderator = ctx.author();
 
     let mute_role = database::get_mute_role(&ctx.data().database, guild_id).await?;
     if let None = mute_role {
@@ -648,6 +674,17 @@ pub async fn unmute(
     let mut member = guild_id.member(&ctx.discord(), user.id).await?;
     // unwrap is safe to use here as there is already a check for `None` prior to this expression
     member.remove_role(&ctx.discord().http, mute_role.unwrap()).await?;
+
+    database::add_moderation(
+        &ctx.data().database, 
+        guild_id, 
+        user.id, 
+        moderator.id,
+        ModerationType::Unmute, 
+        administered_at, 
+        None, 
+        reason.as_deref()
+    ).await?;
 
     Ok(())
 }
