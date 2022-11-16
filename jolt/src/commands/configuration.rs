@@ -12,7 +12,7 @@ use crate::database;
     slash_command,
     required_permissions = "MANAGE_GUILD",
     help_text_fn = "mute_role_help",
-    category = "moderation",
+    category = "configuration",
     rename = "muterole"
 )]
 pub async fn mute_role(
@@ -56,7 +56,7 @@ Example: %muterole @Muted
     slash_command,
     required_permissions = "MANAGE_GUILD",
     help_text_fn = "logs_channel_help",
-    category = "moderation",
+    category = "configuration",
     rename = "logschannel"
 )]
 pub async fn logs_channel(
@@ -89,4 +89,35 @@ fn logs_channel_help() -> String {
 Example: %logschannel #logs
     ",
     )
+}
+
+/// Set or change the prefix for text-based commands in the server
+#[poise::command(
+    prefix_command,
+    slash_command,
+    required_permissions = "MANAGE_GUILD",
+    help_text_fn = "logs_channel_help",
+    category = "moderation",
+    rename = "setprefix"
+)]
+pub async fn set_prefix(
+    ctx: crate::Context<'_>,
+    #[description = "prefix"]
+    prefix: String
+) -> Result<(), crate::DynError> {
+    let guild_id = ctx.guild_id().expect("failed to get guild id!");
+
+    database::set_prefix(&ctx.data().database, guild_id, &prefix).await?;
+
+    ctx.send(|m| {
+        m.embed(|e| {
+            e.color(colors::GREEN).description(format!(
+                "Changed command prefix to {}.",
+                prefix
+            ))
+        })
+    })
+    .await?;
+
+    Ok(())
 }

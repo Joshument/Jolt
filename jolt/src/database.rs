@@ -3,7 +3,7 @@ This file provides a lot of syntatic sugar around database access to make it eas
 In all technicality, you don't even need to know SQL if you don't intend to touch this file. You're welcome
 */
 
-use poise::serenity_prelude::{self, ChannelId};
+use poise::serenity_prelude::{self, ChannelId, Guild};
 use serenity_prelude::{GuildId, RoleId, Timestamp, UserId};
 
 use crate::commands::moderation::types::{ModerationType, ModlogEntry, PageOutOfBounds};
@@ -162,7 +162,7 @@ pub async fn set_logs_channel(
         guild_id_i64,
         channel_id_i64
     )
-    .execute(&*database)
+    .execute(database)
     .await?;
 
     Ok(())
@@ -196,17 +196,36 @@ pub async fn get_logs_channel(
 pub async fn get_prefix(
     database: &sqlx::SqlitePool,
     guild_id: impl Into<GuildId>
-) -> Option<String> {
+) -> Result<Option<String>, sqlx::Error> {
     let guild_id_i64 = guild_id.into().0 as i64;
 
     let entry = sqlx::query!(
         "SELECT prefix FROM guild_settings WHERE guild_id=?",
         guild_id_i64
     )
-    .fetch_one(database)
-    .await.expect("Could not get prefix for server!");
+    .fetch_optional(database)
+    .await?;
 
-    entry.prefix
+    Ok(entry.and_then(|some| some.prefix))
+}
+
+pub async fn set_prefix(
+    database: &sqlx::SqlitePool,
+    guild_id: impl Into<GuildId>,
+    prefix: &str
+) -> sqlx::Result<()> {
+    let guild_id_i64 = guild_id.into().0 as i64;
+
+    sqlx::query!(
+        "INSERT INTO guild_settings (guild_id, prefix) VALUES ($1, $2)
+        ON CONFLICT (guild_id) DO UPDATE SET prefix=excluded.prefix",
+        guild_id_i64,
+        prefix
+    )
+    .execute(database)
+    .await?;
+
+    Ok(())
 }
 
 pub async fn get_modlog_count(
