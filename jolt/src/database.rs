@@ -4,15 +4,15 @@ In all technicality, you don't even need to know SQL if you don't intend to touc
 */
 
 use poise::serenity_prelude::{self, ChannelId};
-use serenity_prelude::{GuildId, UserId, RoleId, Timestamp};
+use serenity_prelude::{GuildId, RoleId, Timestamp, UserId};
 
 use crate::commands::moderation::types::{ModerationType, ModlogEntry, PageOutOfBounds};
 
 /// Sets all existing moderations of the type `ModerationType` to inactive.
 pub async fn clear_moderations(
     database: &sqlx::SqlitePool,
-    guild_id: impl Into<GuildId> + Clone, 
-    user_id: impl Into<UserId> + Clone, 
+    guild_id: impl Into<GuildId> + Clone,
+    user_id: impl Into<UserId> + Clone,
     moderation_type: ModerationType,
 ) -> sqlx::Result<()> {
     let moderation_type_u8 = moderation_type as u8;
@@ -35,28 +35,22 @@ pub async fn clear_moderations(
 
 /// Clear a specific function using the ID of the moderation.
 /// Mostly used to get rid of warnings.
-/// 
+///
 /// **Make sure you are not letting users remove moderations from other guilds!**
-pub async fn clear_single_moderation(
-    database: &sqlx::SqlitePool,
-    id: u64
-) -> sqlx::Result<()> {
+pub async fn clear_single_moderation(database: &sqlx::SqlitePool, id: u64) -> sqlx::Result<()> {
     let id = id as i64;
 
-    sqlx::query!(
-        "UPDATE moderations SET active = FALSE WHERE id = ?",
-        id
-    )
-    .execute(database)
-    .await?;
+    sqlx::query!("UPDATE moderations SET active = FALSE WHERE id = ?", id)
+        .execute(database)
+        .await?;
 
     Ok(())
 }
 
 pub async fn add_moderation(
     database: &sqlx::SqlitePool,
-    guild_id: impl Into<GuildId> + Clone, 
-    user_id: impl Into<UserId> + Clone, 
+    guild_id: impl Into<GuildId> + Clone,
+    user_id: impl Into<UserId> + Clone,
     moderator_id: impl Into<UserId>,
     moderation_type: ModerationType,
     administered_at: Timestamp,
@@ -75,13 +69,19 @@ pub async fn add_moderation(
         | ModerationType::Unban
         | ModerationType::Unmute
         | ModerationType::Untimeout => false,
-        _ => true
+        _ => true,
     };
 
     // Bans, Mutes, and Timeouts should only occur once per guild per member
     // This is to prevent double expiries, which could cause unexpected unban times
     if let ModerationType::Ban | ModerationType::Mute | ModerationType::Timeout = moderation_type {
-        clear_moderations(&database, guild_id.clone(), user_id.clone(), moderation_type).await?;
+        clear_moderations(
+            &database,
+            guild_id.clone(),
+            user_id.clone(),
+            moderation_type,
+        )
+        .await?;
     }
 
     sqlx::query!(
@@ -110,7 +110,7 @@ pub async fn set_mute_role(
 ) -> sqlx::Result<()> {
     let guild_id_i64 = guild_id.into().0 as i64;
     let role_id_i64 = role_id.into().0 as i64;
-    
+
     sqlx::query!(
         "INSERT INTO guild_settings (guild_id, mute_role_id) VALUES ($1, $2)
         ON CONFLICT (guild_id) DO UPDATE SET mute_role_id=excluded.mute_role_id",
@@ -141,10 +141,10 @@ pub async fn get_mute_role(
     }
 
     let entry = entry?;
-    
+
     match entry.mute_role_id {
         Some(role_id) => Ok(Some(RoleId(role_id as u64))),
-        None => Ok(None)
+        None => Ok(None),
     }
 }
 
@@ -155,7 +155,7 @@ pub async fn set_logs_channel(
 ) -> sqlx::Result<()> {
     let guild_id_i64 = guild_id.into().0 as i64;
     let channel_id_i64 = channel_id.into().0 as i64;
-    
+
     sqlx::query!(
         "INSERT INTO guild_settings (guild_id, logs_channel_id) VALUES ($1, $2)
         ON CONFLICT (guild_id) DO UPDATE SET logs_channel_id=excluded.logs_channel_id",
@@ -178,18 +178,18 @@ pub async fn get_logs_channel(
         "SELECT logs_channel_id FROM guild_settings WHERE guild_id=?",
         guild_id_i64
     )
-        .fetch_one(database)
-        .await;
-    
+    .fetch_one(database)
+    .await;
+
     if let Err(_) = entry {
         return Ok(None);
     }
 
     let entry = entry?;
-    
+
     match entry.logs_channel_id {
         Some(channel_id) => Ok(Some(ChannelId(channel_id as u64))),
-        None => Ok(None)
+        None => Ok(None),
     }
 }
 
@@ -199,16 +199,16 @@ pub async fn get_modlog_count(
     user_id: impl Into<UserId>,
 ) -> Result<usize, crate::DynError> {
     let guild_id_i64 = guild_id.into().0 as i64;
-    let user_id_i64 = user_id.into().0 as i64; 
+    let user_id_i64 = user_id.into().0 as i64;
 
     let query_count = sqlx::query!(
         "SELECT * FROM moderations WHERE guild_id=? AND user_id=?",
         guild_id_i64,
         user_id_i64
     )
-        .fetch_all(database)
-        .await?
-        .len();
+    .fetch_all(database)
+    .await?
+    .len();
 
     Ok(query_count)
 }
@@ -218,7 +218,7 @@ pub async fn get_modlog_page(
     guild_id: impl Into<GuildId> + Copy,
     user_id: impl Into<UserId> + Copy,
     page: usize,
-    page_size: usize
+    page_size: usize,
 ) -> Result<Vec<ModlogEntry>, crate::DynError> {
     let guild_id_i64 = guild_id.into().0 as i64;
     let user_id_i64 = user_id.into().0 as i64;
@@ -240,17 +240,25 @@ pub async fn get_modlog_page(
     .fetch_all(database)
     .await?;
 
-    let modlogs = modlogs_raw.iter().map(|modlog| ModlogEntry {
-        id: modlog.id as u64,
-        guild_id: GuildId(modlog.guild_id as u64),
-        moderation_type: (modlog.moderation_type as u8).try_into().unwrap(),
-        user_id: UserId(modlog.user_id as u64),
-        moderator_id: UserId(modlog.moderator_id as u64),
-        administered_at: serenity_prelude::Timestamp::from_unix_timestamp(modlog.administered_at).unwrap(),
-        expiry_date: modlog.expiry_date.map(|some| serenity_prelude::Timestamp::from_unix_timestamp(some).unwrap()),
-        reason: modlog.reason.clone(),
-        active: modlog.active,
-    }).collect();
+    let modlogs = modlogs_raw
+        .iter()
+        .map(|modlog| ModlogEntry {
+            id: modlog.id as u64,
+            guild_id: GuildId(modlog.guild_id as u64),
+            moderation_type: (modlog.moderation_type as u8).try_into().unwrap(),
+            user_id: UserId(modlog.user_id as u64),
+            moderator_id: UserId(modlog.moderator_id as u64),
+            administered_at: serenity_prelude::Timestamp::from_unix_timestamp(
+                modlog.administered_at,
+            )
+            .unwrap(),
+            expiry_date: modlog
+                .expiry_date
+                .map(|some| serenity_prelude::Timestamp::from_unix_timestamp(some).unwrap()),
+            reason: modlog.reason.clone(),
+            active: modlog.active,
+        })
+        .collect();
 
     Ok(modlogs)
 }
@@ -261,7 +269,7 @@ pub async fn get_warning_count(
     user_id: impl Into<UserId>,
 ) -> Result<usize, crate::DynError> {
     let guild_id_i64 = guild_id.into().0 as i64;
-    let user_id_i64 = user_id.into().0 as i64; 
+    let user_id_i64 = user_id.into().0 as i64;
 
     let query_count = sqlx::query!(
         "SELECT * FROM moderations WHERE guild_id=? AND user_id=? AND moderation_type=? AND active=TRUE",
@@ -281,7 +289,7 @@ pub async fn get_warning_page(
     guild_id: impl Into<GuildId> + Copy,
     user_id: impl Into<UserId> + Copy,
     page: usize,
-    page_size: usize
+    page_size: usize,
 ) -> Result<Vec<ModlogEntry>, crate::DynError> {
     let guild_id_i64 = guild_id.into().0 as i64;
     let user_id_i64 = user_id.into().0 as i64;
@@ -304,33 +312,35 @@ pub async fn get_warning_page(
     .fetch_all(database)
     .await?;
 
-    let modlogs = modlogs_raw.iter().map(|modlog| ModlogEntry {
-        id: modlog.id as u64,
-        guild_id: GuildId(modlog.guild_id as u64),
-        moderation_type: (modlog.moderation_type as u8).try_into().unwrap(),
-        user_id: UserId(modlog.user_id as u64),
-        moderator_id: UserId(modlog.moderator_id as u64),
-        administered_at: serenity_prelude::Timestamp::from_unix_timestamp(modlog.administered_at).unwrap(),
-        expiry_date: modlog.expiry_date.map(|some| serenity_prelude::Timestamp::from_unix_timestamp(some).unwrap()),
-        reason: modlog.reason.clone(),
-        active: modlog.active,
-    }).collect();
+    let modlogs = modlogs_raw
+        .iter()
+        .map(|modlog| ModlogEntry {
+            id: modlog.id as u64,
+            guild_id: GuildId(modlog.guild_id as u64),
+            moderation_type: (modlog.moderation_type as u8).try_into().unwrap(),
+            user_id: UserId(modlog.user_id as u64),
+            moderator_id: UserId(modlog.moderator_id as u64),
+            administered_at: serenity_prelude::Timestamp::from_unix_timestamp(
+                modlog.administered_at,
+            )
+            .unwrap(),
+            expiry_date: modlog
+                .expiry_date
+                .map(|some| serenity_prelude::Timestamp::from_unix_timestamp(some).unwrap()),
+            reason: modlog.reason.clone(),
+            active: modlog.active,
+        })
+        .collect();
 
     Ok(modlogs)
 }
 
-pub async fn get_single_modlog(
-    database: &sqlx::SqlitePool,
-    id: u64
-) -> sqlx::Result<ModlogEntry> {
+pub async fn get_single_modlog(database: &sqlx::SqlitePool, id: u64) -> sqlx::Result<ModlogEntry> {
     let id = id as i64;
 
-    let modlog = sqlx::query!(
-        "SELECT * FROM moderations WHERE id=?",
-        id
-    )
-    .fetch_one(database)
-    .await?;
+    let modlog = sqlx::query!("SELECT * FROM moderations WHERE id=?", id)
+        .fetch_one(database)
+        .await?;
 
     Ok(ModlogEntry {
         id: modlog.id as u64,
@@ -338,8 +348,11 @@ pub async fn get_single_modlog(
         moderation_type: (modlog.moderation_type as u8).try_into().unwrap(),
         user_id: UserId(modlog.user_id as u64),
         moderator_id: UserId(modlog.moderator_id as u64),
-        administered_at: serenity_prelude::Timestamp::from_unix_timestamp(modlog.administered_at).unwrap(),
-        expiry_date: modlog.expiry_date.map(|some| serenity_prelude::Timestamp::from_unix_timestamp(some).unwrap()),
+        administered_at: serenity_prelude::Timestamp::from_unix_timestamp(modlog.administered_at)
+            .unwrap(),
+        expiry_date: modlog
+            .expiry_date
+            .map(|some| serenity_prelude::Timestamp::from_unix_timestamp(some).unwrap()),
         reason: modlog.reason.clone(),
         active: modlog.active,
     })

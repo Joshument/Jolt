@@ -15,5 +15,7 @@ pub fn dual_command(_: TokenStream, item: TokenStream) -> TokenStream {
 
     quote!(
         use crate::commands::*;
-    ).to_token_stream().into()
+    )
+    .to_token_stream()
+    .into()
 }

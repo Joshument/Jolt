@@ -1,21 +1,21 @@
+mod colors;
 mod commands;
 mod database;
-mod colors;
 
+use std::error::Error;
 use std::sync::Arc;
 use std::{fs, time::Instant};
-use std::error::Error;
 
 use commands::moderation::types::ModerationType;
 // use commands::moderation::types::ModerationType;
 use poise::{serenity_prelude, PrefixFrameworkOptions};
-use serenity_prelude::GatewayIntents;
 use serde::{Deserialize, Serialize};
+use serenity_prelude::GatewayIntents;
 use sqlx::sqlite;
 
+use commands::configuration::*;
 use commands::meta::*;
 use commands::moderation::*;
-use commands::configuration::*;
 
 // This gets the current git commit hash for development builds. See the build.rs file for more information on how this is obtained.
 const VERSION: &str = concat!("git-", env!("GIT_HASH"));
@@ -38,7 +38,10 @@ impl serenity_prelude::EventHandler for Handler {
             // Note that array index 0 is 0-indexed, while index 1 is 1-indexed.
             //
             // This may seem unintuitive, but it models Discord's behaviour.
-            println!("{} is connected on shard {}/{}!", ready.user.name, shard[0], shard[1],);
+            println!(
+                "{} is connected on shard {}/{}!",
+                ready.user.name, shard[0], shard[1],
+            );
         }
     }
 
@@ -62,9 +65,12 @@ async fn on_error(err: crate::FrameworkError<'_>) {
     // Very fun way to deal wtih errors
     let error_message = match &err {
         // IF THERE'S A BETTER WAY TO DO THIS PLEASE TELL ME THIS LOOKS TERRIBLE
-        poise::FrameworkError::Command  {error, ..}
-        | poise::FrameworkError::ArgumentParse {error, ..} => error.to_string(),
-        poise::FrameworkError::MissingUserPermissions { missing_permissions, .. } => {
+        poise::FrameworkError::Command { error, .. }
+        | poise::FrameworkError::ArgumentParse { error, .. } => error.to_string(),
+        poise::FrameworkError::MissingUserPermissions {
+            missing_permissions,
+            ..
+        } => {
             format!(
                 "You do not have the permission(s){} to run this command!",
                 format!(
@@ -77,23 +83,19 @@ async fn on_error(err: crate::FrameworkError<'_>) {
                 )
             )
         }
-        _ => String::from("error is not intentional; please send this to the developers (/info)")
+        _ => String::from("error is not intentional; please send this to the developers (/info)"),
     };
 
     // Just sends an embed for the error instead of the message it's supposed to send
     match err.ctx() {
-        Some(ctx) => { 
-            ctx.send(|m| m
-                .embed(|e| e
-                    .color(colors::RED)
-                        .field("Error!", error_message, false)
-                )
-            ).await.expect("Failed to send the error message!");
-        },
+        Some(ctx) => {
+            ctx.send(|m| m.embed(|e| e.color(colors::RED).field("Error!", error_message, false)))
+                .await
+                .expect("Failed to send the error message!");
+        }
         None => println!("{}", error_message),
     };
 }
-
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -108,14 +110,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .connect_with(
             sqlite::SqliteConnectOptions::new()
                 .filename(&config.database)
-                .create_if_missing(true)
+                .create_if_missing(true),
         )
         .await
         .expect("Couldn't connect to the database!");
 
     // Migrations are just initial table declerations. You can find them in /migrations/.
     // I believe that this is specifically for binary versions of the software, but I'm not 100% sure.
-    sqlx::migrate!("./../migrations").run(&database).await.expect("Couldn't run database migrations!");
+    sqlx::migrate!("./../migrations")
+        .run(&database)
+        .await
+        .expect("Couldn't run database migrations!");
 
     // Used in the info command to get the bot uptime. Declared here so that the timer starts ticking as the bot starts up
     let uptime = Instant::now();

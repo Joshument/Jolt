@@ -1,6 +1,9 @@
 // see https://doc.rust-lang.org/cargo/reference/build-scripts.html
 
-use std::{process::{Command, Output, ExitStatus}, os::unix::process::ExitStatusExt};
+use std::{
+    os::unix::process::ExitStatusExt,
+    process::{Command, ExitStatus, Output},
+};
 
 fn main() {
     println!("cargo:rerun-if-changed=.git/refs/heads");

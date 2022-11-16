@@ -15,13 +15,12 @@ but when in doubt, go with KICK_MEMBERS.
 pub mod types;
 mod utilities;
 
-use crate::database;
 use crate::colors;
 use crate::commands::moderation::types::*;
 use crate::commands::moderation::utilities::*;
+use crate::database;
 
 use poise::serenity_prelude;
-
 
 /// Warn a user
 #[poise::command(
@@ -29,12 +28,14 @@ use poise::serenity_prelude;
     slash_command,
     required_permissions = "KICK_MEMBERS",
     help_text_fn = "warn_help",
-    category = "moderation",
+    category = "moderation"
 )]
 pub async fn warn(
     ctx: crate::Context<'_>,
     #[description = "User to warn"] user: serenity_prelude::User,
-    #[description = "Reason for warning"] #[rest] reason: Option<String>,
+    #[description = "Reason for warning"]
+    #[rest]
+    reason: Option<String>,
 ) -> Result<(), crate::DynError> {
     let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
     let moderator = ctx.author();
@@ -48,39 +49,48 @@ pub async fn warn(
     let dm_channel = user.create_dm_channel(&ctx.discord().http).await?;
 
     send_moderation_messages(
-        &ctx, 
-        &dm_channel, 
-        &format!("You have been warned in **{}**", &guild_id.name(&ctx.discord().cache).expect("Failed to get guild name!")),
-        colors::RED, 
-        "Zap!", 
+        &ctx,
+        &dm_channel,
+        &format!(
+            "You have been warned in **{}**",
+            &guild_id
+                .name(&ctx.discord().cache)
+                .expect("Failed to get guild name!")
+        ),
+        colors::RED,
+        "Zap!",
         &format!("User <@{}> has been warned", user.id.as_u64()),
         colors::GREEN,
         &format!(
-            "I was unable to DM <@{}> about their moderation.", 
+            "I was unable to DM <@{}> about their moderation.",
             user.id.as_u64()
-        ), 
-        colors::RED, 
-        reason.as_deref()
-    ).await?;
+        ),
+        colors::RED,
+        reason.as_deref(),
+    )
+    .await?;
 
     database::add_moderation(
-        &ctx.data().database, 
-        guild_id, 
-        user.id, 
+        &ctx.data().database,
+        guild_id,
+        user.id,
         moderator.id,
-        ModerationType::Warning, 
-        administered_at, 
-        None, 
-        reason.as_deref()
-    ).await?;
+        ModerationType::Warning,
+        administered_at,
+        None,
+        reason.as_deref(),
+    )
+    .await?;
 
     Ok(())
 }
 
 fn warn_help() -> String {
-    String::from("Warn a user in the server (with an optional reason).
+    String::from(
+        "Warn a user in the server (with an optional reason).
 Example: %warn @Joshument#0001 I am feeling evil today
-        ")
+        ",
+    )
 }
 
 /// Delete a warn from a user. Specified by ID.
@@ -89,16 +99,19 @@ Example: %warn @Joshument#0001 I am feeling evil today
     slash_command,
     required_permissions = "KICK_MEMBERS",
     help_text_fn = "delwarn_help",
-    category = "moderation",
+    category = "moderation"
 )]
 pub async fn delwarn(
     ctx: crate::Context<'_>,
     #[description = "Modlog ID to remove"] id: u64,
 ) -> Result<(), crate::DynError> {
     let modlog = database::get_single_modlog(&ctx.data().database, id).await?;
-    
+
     if modlog.guild_id != ctx.guild_id().expect("Failed to get guild id!") {
-        return Err(Box::new(ModlogNotInGuild(id, ctx.guild().expect("Failed to get guild!"))));
+        return Err(Box::new(ModlogNotInGuild(
+            id,
+            ctx.guild().expect("Failed to get guild!"),
+        )));
     }
 
     if modlog.moderation_type != ModerationType::Warning {
@@ -108,19 +121,22 @@ pub async fn delwarn(
     database::clear_single_moderation(&ctx.data().database, id).await?;
 
     ctx.send(|m| {
-        m.embed(|e| e
-            .color(crate::colors::GREEN)
-            .field("Done!", &format!("Deleted warning **{id}**"), true)
-        )
-    }).await?;
+        m.embed(|e| {
+            e.color(crate::colors::GREEN)
+                .field("Done!", &format!("Deleted warning **{id}**"), true)
+        })
+    })
+    .await?;
 
     Ok(())
 }
 
 fn delwarn_help() -> String {
-    String::from("Delete a warn from a user.
+    String::from(
+        "Delete a warn from a user.
 Example: %delwarn 3872
-        ")
+        ",
+    )
 }
 
 /// Get the mod logs for a specified user
@@ -129,7 +145,7 @@ Example: %delwarn 3872
     slash_command,
     required_permissions = "KICK_MEMBERS",
     help_text_fn = "warnings_help",
-    category = "moderation",
+    category = "moderation"
 )]
 pub async fn warnings(
     ctx: crate::Context<'_>,
@@ -138,42 +154,46 @@ pub async fn warnings(
 ) -> Result<(), crate::DynError> {
     let page = match page {
         Some(page) => page,
-        None => 1
+        None => 1,
     };
 
     let max_page = database::get_warning_count(
-        &ctx.data().database, 
-        ctx.guild_id().expect("Failed to get guild id!"), 
+        &ctx.data().database,
+        ctx.guild_id().expect("Failed to get guild id!"),
         user.id,
-    ).await? / 10 + 1;
+    )
+    .await?
+        / 10
+        + 1;
     let modlog_page = database::get_warning_page(
-        &ctx.data().database, 
-        ctx.guild_id().expect("Failed to get guild id!"), 
-        user.id, 
-        page, 
-        10
-    ).await?;
+        &ctx.data().database,
+        ctx.guild_id().expect("Failed to get guild id!"),
+        user.id,
+        page,
+        10,
+    )
+    .await?;
 
-    ctx.send(|m| m
-        .embed(|e| {
-            e.title(format!("Warnings for {}",  user.name));
+    ctx.send(|m| {
+        m.embed(|e| {
+            e.title(format!("Warnings for {}", user.name));
 
             for modlog in modlog_page {
                 e.field(
                     format!("ID {}", modlog.id),
                     format!(
                         "{}{}{}",
+                        format!("\n**Moderator:** <@{}>", modlog.moderator_id),
                         format!(
-                            "\n**Moderator:** <@{}>",
-                            modlog.moderator_id
+                            "\n**Administered At:** <t:{}:F>",
+                            modlog.administered_at.unix_timestamp()
                         ),
-                        format!("\n**Administered At:** <t:{}:F>", modlog.administered_at.unix_timestamp()),
                         match modlog.reason {
                             Some(reason) => format!("\n**Reason:** {}", reason),
                             None => String::new(),
                         },
                     ),
-                    false
+                    false,
                 );
             }
 
@@ -181,15 +201,18 @@ pub async fn warnings(
 
             e
         })
-    ).await?;
+    })
+    .await?;
 
     Ok(())
 }
 
 fn warnings_help() -> String {
-    String::from("Get the warnings for the specified user.
+    String::from(
+        "Get the warnings for the specified user.
 Example: %modlogs @Joshument#0001 1
-        ")
+        ",
+    )
 }
 
 /// Ban a user (with an optional specified time)
@@ -199,13 +222,15 @@ Example: %modlogs @Joshument#0001 1
     required_permissions = "BAN_MEMBERS",
     required_bot_permissions = "BAN_MEMBERS",
     help_text_fn = "ban_help",
-    category = "moderation",
+    category = "moderation"
 )]
 pub async fn ban(
     ctx: crate::Context<'_>,
     #[description = "User to ban"] user: serenity_prelude::User,
     #[description = "Length of the ban"] length: Option<humantime::Duration>,
-    #[description = "Reason for ban"] #[rest] reason: Option<String>,
+    #[description = "Reason for ban"]
+    #[rest]
+    reason: Option<String>,
 ) -> Result<(), crate::DynError> {
     let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
     let moderator = ctx.author();
@@ -213,9 +238,13 @@ pub async fn ban(
     // Replaces Option<Duration> into Option<Timestamp>
     // .transpose()? brings out the inner result propagate upstream with `?`
     // Using `?` inside of .map() would instead return it to the closure, therefore making it invalid.
-    let expiry_date = length.map(|duration| 
-        serenity_prelude::Timestamp::from_unix_timestamp(administered_at.unix_timestamp() + duration.as_secs() as i64)
-    ).transpose()?;
+    let expiry_date = length
+        .map(|duration| {
+            serenity_prelude::Timestamp::from_unix_timestamp(
+                administered_at.unix_timestamp() + duration.as_secs() as i64,
+            )
+        })
+        .transpose()?;
 
     let member = guild_id.member(&ctx.discord(), user.id).await?;
     if is_member_moderator(&ctx.discord().cache, &member)? {
@@ -225,37 +254,49 @@ pub async fn ban(
     let dm_channel = user.create_dm_channel(&ctx.discord().http).await?;
 
     send_moderation_messages(
-        &ctx, 
-        &dm_channel, 
-        &append_expiry_date(&format!("You have been banned from **{}**", 
-            &guild_id.name(&ctx.discord().cache).expect("Failed to get guild name!")), 
-            expiry_date
+        &ctx,
+        &dm_channel,
+        &append_expiry_date(
+            &format!(
+                "You have been banned from **{}**",
+                &guild_id
+                    .name(&ctx.discord().cache)
+                    .expect("Failed to get guild name!")
+            ),
+            expiry_date,
         ),
-        colors::RED, 
-        "Zap!", 
-        &append_expiry_date(&format!("User <@{}> has been banned", user.id.as_u64()), expiry_date),
+        colors::RED,
+        "Zap!",
+        &append_expiry_date(
+            &format!("User <@{}> has been banned", user.id.as_u64()),
+            expiry_date,
+        ),
         colors::GREEN,
         &format!(
-            "I was unable to DM <@{}> about their moderation.", 
+            "I was unable to DM <@{}> about their moderation.",
             user.id.as_u64()
-        ), 
-        colors::RED, 
-        reason.as_deref()
-    ).await?;
+        ),
+        colors::RED,
+        reason.as_deref(),
+    )
+    .await?;
 
     database::add_moderation(
-        &ctx.data().database, 
-        guild_id, 
-        user.id, 
+        &ctx.data().database,
+        guild_id,
+        user.id,
         moderator.id,
-        ModerationType::Ban, 
-        administered_at, 
-        expiry_date, 
-        reason.as_deref()
-    ).await?;
+        ModerationType::Ban,
+        administered_at,
+        expiry_date,
+        reason.as_deref(),
+    )
+    .await?;
 
     if let Some(reason) = &reason {
-        guild_id.ban_with_reason(&ctx.discord().http, &user.id, 0, &reason).await?;
+        guild_id
+            .ban_with_reason(&ctx.discord().http, &user.id, 0, &reason)
+            .await?;
     } else {
         guild_id.ban(&ctx.discord().http, &user.id, 0).await?;
     }
@@ -264,9 +305,11 @@ pub async fn ban(
 }
 
 fn ban_help() -> String {
-    String::from("Ban a user from the server (with an optional specified time and reason).
+    String::from(
+        "Ban a user from the server (with an optional specified time and reason).
 Example: %ban @Joshument#0001 10s joined 10 seconds too early
-        ")
+        ",
+    )
 }
 
 /// Unban a user
@@ -276,12 +319,14 @@ Example: %ban @Joshument#0001 10s joined 10 seconds too early
     required_permissions = "BAN_MEMBERS",
     required_bot_permissions = "BAN_MEMBERS",
     help_text_fn = "unban_help",
-    category = "moderation",
+    category = "moderation"
 )]
 pub async fn unban(
     ctx: crate::Context<'_>,
     #[description = "User to unban"] user: serenity_prelude::User,
-    #[description = "Reason for the unban"] #[rest] reason: Option<String>,
+    #[description = "Reason for the unban"]
+    #[rest]
+    reason: Option<String>,
 ) -> Result<(), crate::DynError> {
     let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
     let administered_at = ctx.created_at();
@@ -290,44 +335,52 @@ pub async fn unban(
     let dm_channel = user.create_dm_channel(&ctx.discord().http).await?;
 
     send_moderation_messages(
-        &ctx, 
-        &dm_channel, 
-        &format!("You have been unbanned from **{}**",
-            &guild_id.name(&ctx.discord().cache).expect("Failed to get guild name!")
+        &ctx,
+        &dm_channel,
+        &format!(
+            "You have been unbanned from **{}**",
+            &guild_id
+                .name(&ctx.discord().cache)
+                .expect("Failed to get guild name!")
         ),
-        colors::GREEN, 
-        "!paZ", 
+        colors::GREEN,
+        "!paZ",
         &format!("User <@{}> has been unbanned", user.id.as_u64()),
         colors::GREEN,
         &format!(
-            "I was unable to DM <@{}> about their moderation.", 
+            "I was unable to DM <@{}> about their moderation.",
             user.id.as_u64()
-        ), 
-        colors::RED, 
-        reason.as_deref()
-    ).await?;
+        ),
+        colors::RED,
+        reason.as_deref(),
+    )
+    .await?;
 
     guild_id.unban(&ctx.discord().http, &user.id).await?;
-    database::clear_moderations(&ctx.data().database, guild_id, user.id, ModerationType::Ban).await?;
+    database::clear_moderations(&ctx.data().database, guild_id, user.id, ModerationType::Ban)
+        .await?;
 
     database::add_moderation(
-        &ctx.data().database, 
-        guild_id, 
-        user.id, 
+        &ctx.data().database,
+        guild_id,
+        user.id,
         moderator.id,
-        ModerationType::Unban, 
-        administered_at, 
-        None, 
-        reason.as_deref()
-    ).await?;
+        ModerationType::Unban,
+        administered_at,
+        None,
+        reason.as_deref(),
+    )
+    .await?;
 
     Ok(())
 }
 
 fn unban_help() -> String {
-    String::from("Unban a user from the server.
+    String::from(
+        "Unban a user from the server.
 Example: %unban @Joshument#0001 my perspective of you has changed
-        ")
+        ",
+    )
 }
 
 /// Kick a user
@@ -337,12 +390,14 @@ Example: %unban @Joshument#0001 my perspective of you has changed
     required_permissions = "KICK_MEMBERS",
     required_bot_permissions = "KICK_MEMBERS",
     help_text_fn = "kick_help",
-    category = "moderation",
+    category = "moderation"
 )]
 pub async fn kick(
     ctx: crate::Context<'_>,
     #[description = "User to kick"] user: serenity_prelude::User,
-    #[description = "Reason for kick"] #[rest] reason: Option<String>,
+    #[description = "Reason for kick"]
+    #[rest]
+    reason: Option<String>,
 ) -> Result<(), crate::DynError> {
     let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
     let moderator = ctx.author();
@@ -353,52 +408,60 @@ pub async fn kick(
         return Err(Box::new(MemberIsModerator(member)));
     }
 
-
     let dm_channel = user.create_dm_channel(&ctx.discord()).await?;
 
     send_moderation_messages(
-        &ctx, 
-        &dm_channel, 
+        &ctx,
+        &dm_channel,
         &format!(
-            "You have been kicked from **{}**!", 
-            guild_id.name(&ctx.discord().cache).expect("Failed to get guild name!").as_str(),
-        ), 
-        colors::RED, 
-        "Zap!", 
-        &format!("User <@{}> has been kicked", user.id.as_u64()), 
+            "You have been kicked from **{}**!",
+            guild_id
+                .name(&ctx.discord().cache)
+                .expect("Failed to get guild name!")
+                .as_str(),
+        ),
+        colors::RED,
+        "Zap!",
+        &format!("User <@{}> has been kicked", user.id.as_u64()),
         colors::GREEN,
         &format!(
-            "I was unable to DM <@{}> about their moderation.", 
+            "I was unable to DM <@{}> about their moderation.",
             user.id.as_u64()
-        ), 
-        colors::RED, 
-        reason.as_deref()
-    ).await?;
+        ),
+        colors::RED,
+        reason.as_deref(),
+    )
+    .await?;
 
     database::add_moderation(
-        &ctx.data().database, 
-        guild_id, 
-        user.id, 
+        &ctx.data().database,
+        guild_id,
+        user.id,
         moderator.id,
-        ModerationType::Kick, 
-        administered_at, 
-        None, 
-        reason.as_deref()
-    ).await?;
+        ModerationType::Kick,
+        administered_at,
+        None,
+        reason.as_deref(),
+    )
+    .await?;
 
     if let Some(reason) = &reason {
-        guild_id.kick_with_reason(&ctx.discord().http, user.id, &reason).await?;
+        guild_id
+            .kick_with_reason(&ctx.discord().http, user.id, &reason)
+            .await?;
     } else {
-        guild_id.kick(&ctx.discord().http, user.id,).await?;
+        guild_id.kick(&ctx.discord().http, user.id).await?;
     }
 
     Ok(())
 }
 
 fn kick_help() -> String {
-    String::from("Kick a user from the server.
+    String::from(
+        "Kick a user from the server.
 Example: %kick @Joshument#0001 nerd
-    ")
+    ",
+    )
 }
 
 /// Timeout a user for a specified amount of time
@@ -408,39 +471,45 @@ Example: %kick @Joshument#0001 nerd
     required_permissions = "MODERATE_MEMBERS",
     required_bot_permissions = "MODERATE_MEMBERS",
     help_text_fn = "timeout_help",
-    category = "moderation",
+    category = "moderation"
 )]
 pub async fn timeout(
     ctx: crate::Context<'_>,
     #[description = "User to timeout"] user: serenity_prelude::User,
     #[description = "Length of the timeout"] length: humantime::Duration,
-    #[description = "Reason for timeout"] #[rest] reason: Option<String>,
+    #[description = "Reason for timeout"]
+    #[rest]
+    reason: Option<String>,
 ) -> Result<(), crate::DynError> {
     let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
     let moderator = ctx.author();
     let administered_at = ctx.created_at();
-    let expiry_date = 
-        serenity_prelude::Timestamp::from_unix_timestamp(administered_at.unix_timestamp() + length.as_secs() as i64)?;
+    let expiry_date = serenity_prelude::Timestamp::from_unix_timestamp(
+        administered_at.unix_timestamp() + length.as_secs() as i64,
+    )?;
 
     let dm_channel = user.create_dm_channel(&ctx.discord()).await?;
 
     // start with the timeout to see if the specified time is over 28d or not
     let successful_timeout = guild_id
-    .member(&ctx.discord().http, &user.id).await?
-    .disable_communication_until_datetime(&ctx.discord().http, expiry_date).await;
+        .member(&ctx.discord().http, &user.id)
+        .await?
+        .disable_communication_until_datetime(&ctx.discord().http, expiry_date)
+        .await;
 
     if let Err(e) = &successful_timeout {
         match e {
             serenity_prelude::SerenityError::Http(_) => {
                 ctx.send(|m| {
-                    m.embed(|e| e
-                        .color(colors::RED)
-                        .description("Timeouts must be shorter than 28 days.")
-                    )
+                    m.embed(|e| {
+                        e.color(colors::RED)
+                            .description("Timeouts must be shorter than 28 days.")
+                    })
                     .ephemeral(true)
-                }).await?;
+                })
+                .await?;
             }
-            _ => ()
+            _ => (),
         }
 
         // This seems to be the best way to return the error after checking it
@@ -448,42 +517,53 @@ pub async fn timeout(
     }
 
     send_moderation_messages(
-        &ctx, 
-        &dm_channel, 
-        &format!("You have been timed out from **{}** until <t:{}:F>", 
-            guild_id.name(&ctx.discord().cache).expect("Failed to get guild name!"), 
+        &ctx,
+        &dm_channel,
+        &format!(
+            "You have been timed out from **{}** until <t:{}:F>",
+            guild_id
+                .name(&ctx.discord().cache)
+                .expect("Failed to get guild name!"),
             expiry_date.unix_timestamp()
         ),
-        colors::RED, 
-        "Zap!", 
-        &format!("User <@{}> has been timed out until <t:{}:F>", user.id.as_u64(), expiry_date.unix_timestamp()),
+        colors::RED,
+        "Zap!",
+        &format!(
+            "User <@{}> has been timed out until <t:{}:F>",
+            user.id.as_u64(),
+            expiry_date.unix_timestamp()
+        ),
         colors::GREEN,
         &format!(
-            "I was unable to DM <@{}> about their moderation.", 
+            "I was unable to DM <@{}> about their moderation.",
             user.id.as_u64()
-        ), 
-        colors::RED, 
-        reason.as_deref()
-    ).await?;
+        ),
+        colors::RED,
+        reason.as_deref(),
+    )
+    .await?;
 
     database::add_moderation(
-        &ctx.data().database, 
-        guild_id, 
-        user.id, 
+        &ctx.data().database,
+        guild_id,
+        user.id,
         moderator.id,
-        ModerationType::Timeout, 
-        administered_at, 
-        Some(expiry_date), 
-        reason.as_deref()
-    ).await?;
+        ModerationType::Timeout,
+        administered_at,
+        Some(expiry_date),
+        reason.as_deref(),
+    )
+    .await?;
 
     Ok(())
 }
 
 fn timeout_help() -> String {
-    String::from("Time out a user from the server.
+    String::from(
+        "Time out a user from the server.
 Example: %timeout @Paze#2936 10m not a fan of the inconsistencies
-            ")
+            ",
+    )
 }
 
 /// Revoke the timeout for a user
@@ -499,55 +579,72 @@ Example: %timeout @Paze#2936 10m not a fan of the inconsistencies
 pub async fn untimeout(
     ctx: crate::Context<'_>,
     #[description = "User to untimeout"] user: serenity_prelude::User,
-    #[description = "Reason for the untimeout"] #[rest] reason: Option<String>,
+    #[description = "Reason for the untimeout"]
+    #[rest]
+    reason: Option<String>,
 ) -> Result<(), crate::DynError> {
     let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
     let moderator = ctx.author();
     let administered_at = ctx.created_at();
 
     let dm_channel = user.create_dm_channel(&ctx.discord()).await?;
-    database::clear_moderations(&ctx.data().database, guild_id, user.id, ModerationType::Timeout).await?;
+    database::clear_moderations(
+        &ctx.data().database,
+        guild_id,
+        user.id,
+        ModerationType::Timeout,
+    )
+    .await?;
 
     guild_id
-        .member(&ctx.discord().http, &user.id).await?
-        .enable_communication(&ctx.discord().http).await?;
+        .member(&ctx.discord().http, &user.id)
+        .await?
+        .enable_communication(&ctx.discord().http)
+        .await?;
 
     send_moderation_messages(
-        &ctx, 
-        &dm_channel, 
-        &format!("You have been untimed out from **{}**",
-            &guild_id.name(&ctx.discord().cache).expect("Failed to get guild name!")
+        &ctx,
+        &dm_channel,
+        &format!(
+            "You have been untimed out from **{}**",
+            &guild_id
+                .name(&ctx.discord().cache)
+                .expect("Failed to get guild name!")
         ),
-        colors::GREEN, 
-        "!paZ", 
+        colors::GREEN,
+        "!paZ",
         &format!("User <@{}> has been untimed out", user.id.as_u64()),
         colors::GREEN,
         &format!(
-            "I was unable to DM <@{}> about their moderation.", 
+            "I was unable to DM <@{}> about their moderation.",
             user.id.as_u64()
-        ), 
-        colors::RED, 
-        reason.as_deref()
-    ).await?;
+        ),
+        colors::RED,
+        reason.as_deref(),
+    )
+    .await?;
 
     database::add_moderation(
-        &ctx.data().database, 
-        guild_id, 
-        user.id, 
+        &ctx.data().database,
+        guild_id,
+        user.id,
         moderator.id,
-        ModerationType::Untimeout, 
-        administered_at, 
-        None, 
-        reason.as_deref()
-    ).await?;
+        ModerationType::Untimeout,
+        administered_at,
+        None,
+        reason.as_deref(),
+    )
+    .await?;
 
     Ok(())
 }
 
 fn untimeout_help() -> String {
-    String::from("Revoke the timeoutout a user.
+    String::from(
+        "Revoke the timeoutout a user.
 Example: %untimeout @Paze#2936 fan of the consistencies :)
-            ")
+            ",
+    )
 }
 
 /// Mute a user (with an optional specified time)
@@ -557,13 +654,15 @@ Example: %untimeout @Paze#2936 fan of the consistencies :)
     required_permissions = "MODERATE_MEMBERS",
     required_bot_permissions = "MANAGE_ROLES",
     help_text_fn = "mute_help",
-    category = "moderation",
+    category = "moderation"
 )]
 pub async fn mute(
     ctx: crate::Context<'_>,
     #[description = "User to mute"] user: serenity_prelude::User,
     #[description = "Length of the mute"] length: Option<humantime::Duration>,
-    #[description = "Reason for mute"] #[rest] reason: Option<String>,
+    #[description = "Reason for mute"]
+    #[rest]
+    reason: Option<String>,
 ) -> Result<(), crate::DynError> {
     let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
     let moderator = ctx.author();
@@ -575,62 +674,81 @@ pub async fn mute(
 
     let mute_role = database::get_mute_role(&ctx.data().database, guild_id).await?;
     if let None = mute_role {
-        return Err(Box::new(types::ConfigNotSetError(String::from("%muterole"))))
+        return Err(Box::new(types::ConfigNotSetError(String::from(
+            "%muterole",
+        ))));
     }
 
     let administered_at = ctx.created_at();
     // Replaces Option<Duration> into Option<Timestamp>
     // .transpose()? brings out the inner result to propagate upstream with `?`
     // Using `?` inside of .map() would instead return it to the closure, therefore making it invalid.
-    let expiry_date = length.map(|duration| 
-        serenity_prelude::Timestamp::from_unix_timestamp(administered_at.unix_timestamp() + duration.as_secs() as i64)
-    ).transpose()?;
+    let expiry_date = length
+        .map(|duration| {
+            serenity_prelude::Timestamp::from_unix_timestamp(
+                administered_at.unix_timestamp() + duration.as_secs() as i64,
+            )
+        })
+        .transpose()?;
 
     let dm_channel = user.create_dm_channel(&ctx.discord()).await?;
 
     send_moderation_messages(
-        &ctx, 
-        &dm_channel, 
-        &append_expiry_date(&format!("You have been muted in **{}**", 
-            &guild_id.name(&ctx.discord().cache).expect("Failed to get guild name!")), 
-            expiry_date
+        &ctx,
+        &dm_channel,
+        &append_expiry_date(
+            &format!(
+                "You have been muted in **{}**",
+                &guild_id
+                    .name(&ctx.discord().cache)
+                    .expect("Failed to get guild name!")
+            ),
+            expiry_date,
         ),
-        colors::RED, 
-        "Zap!", 
-        &append_expiry_date(&format!("User <@{}> has been muted", user.id.as_u64()), expiry_date),
+        colors::RED,
+        "Zap!",
+        &append_expiry_date(
+            &format!("User <@{}> has been muted", user.id.as_u64()),
+            expiry_date,
+        ),
         colors::GREEN,
         &format!(
-            "I was unable to DM <@{}> about their moderation.", 
+            "I was unable to DM <@{}> about their moderation.",
             user.id.as_u64()
-        ), 
-        colors::RED, 
-        reason.as_deref()
-    ).await?;
+        ),
+        colors::RED,
+        reason.as_deref(),
+    )
+    .await?;
 
     database::add_moderation(
-        &ctx.data().database, 
-        guild_id, 
-        user.id, 
+        &ctx.data().database,
+        guild_id,
+        user.id,
         moderator.id,
-        ModerationType::Mute, 
-        administered_at, 
-        expiry_date, 
-        reason.as_deref()
-    ).await?;
+        ModerationType::Mute,
+        administered_at,
+        expiry_date,
+        reason.as_deref(),
+    )
+    .await?;
 
     let mut member = guild_id.member(&ctx.discord(), user.id).await?;
     // unwrap is safe to use here as there is already a check for `None` prior to this expression
-    member.add_role(&ctx.discord().http, mute_role.unwrap()).await?;
+    member
+        .add_role(&ctx.discord().http, mute_role.unwrap())
+        .await?;
 
     Ok(())
 }
 
 fn mute_help() -> String {
-    String::from("Mute a user (with an optional specified time).
+    String::from(
+        "Mute a user (with an optional specified time).
 Example: %mute @Joshument#0001 3d keeps procrastinating on the modlogs command
-        ")
+        ",
+    )
 }
-
 
 /// Unmute a user
 #[poise::command(
@@ -639,82 +757,109 @@ Example: %mute @Joshument#0001 3d keeps procrastinating on the modlogs command
     required_permissions = "MODERATE_MEMBERS",
     required_bot_permissions = "MANAGE_ROLES",
     help_text_fn = "unmute_help",
-    category = "moderation",
+    category = "moderation"
 )]
 pub async fn unmute(
     ctx: crate::Context<'_>,
     #[description = "User to mute"] user: serenity_prelude::User,
     #[description = "Length of the mute"] length: Option<humantime::Duration>,
-    #[description = "Reason for mute"] #[rest] reason: Option<String>,
+    #[description = "Reason for mute"]
+    #[rest]
+    reason: Option<String>,
 ) -> Result<(), crate::DynError> {
     let guild_id = ctx.guild_id().expect("Failed to get guild ID!");
     let moderator = ctx.author();
 
     let mute_role = database::get_mute_role(&ctx.data().database, guild_id).await?;
     if let None = mute_role {
-        ctx.send(|m| m
-            .embed(|e| e
-                .color(colors::RED)
-                .description("Mute role has not been set! Please set the mute role using %muterole")
-            )
-        ).await?;
+        ctx.send(|m| {
+            m.embed(|e| {
+                e.color(colors::RED).description(
+                    "Mute role has not been set! Please set the mute role using %muterole",
+                )
+            })
+        })
+        .await?;
     }
 
     let administered_at = ctx.created_at();
     // Replaces Option<Duration> into Option<Timestamp>
     // .transpose()? brings out the inner result propagate upstream with `?`
     // Using `?` inside of .map() would instead return it to the closure, therefore making it invalid.
-    let expiry_date = length.map(|duration| 
-        serenity_prelude::Timestamp::from_unix_timestamp(administered_at.unix_timestamp() + duration.as_secs() as i64)
-    ).transpose()?;
+    let expiry_date = length
+        .map(|duration| {
+            serenity_prelude::Timestamp::from_unix_timestamp(
+                administered_at.unix_timestamp() + duration.as_secs() as i64,
+            )
+        })
+        .transpose()?;
 
     let dm_channel = user.create_dm_channel(&ctx.discord()).await?;
 
     send_moderation_messages(
-        &ctx, 
-        &dm_channel, 
-        &append_expiry_date(&format!("You have been unmuted in **{}**", 
-            &guild_id.name(&ctx.discord().cache).expect("Failed to get guild name!")), 
-            expiry_date
+        &ctx,
+        &dm_channel,
+        &append_expiry_date(
+            &format!(
+                "You have been unmuted in **{}**",
+                &guild_id
+                    .name(&ctx.discord().cache)
+                    .expect("Failed to get guild name!")
+            ),
+            expiry_date,
         ),
-        colors::RED, 
-        "!paZ", 
-        &append_expiry_date(&format!("User <@{}> has been unmuted", user.id.as_u64()), expiry_date),
+        colors::RED,
+        "!paZ",
+        &append_expiry_date(
+            &format!("User <@{}> has been unmuted", user.id.as_u64()),
+            expiry_date,
+        ),
         colors::GREEN,
         &format!(
-            "I was unable to DM <@{}> about their moderation.", 
+            "I was unable to DM <@{}> about their moderation.",
             user.id.as_u64()
-        ), 
-        colors::RED, 
-        reason.as_deref()
-    ).await?;
+        ),
+        colors::RED,
+        reason.as_deref(),
+    )
+    .await?;
 
-    database::clear_moderations(&ctx.data().database, guild_id, user.id, ModerationType::Mute).await?;
+    database::clear_moderations(
+        &ctx.data().database,
+        guild_id,
+        user.id,
+        ModerationType::Mute,
+    )
+    .await?;
 
     let mut member = guild_id.member(&ctx.discord(), user.id).await?;
     // unwrap is safe to use here as there is already a check for `None` prior to this expression
-    member.remove_role(&ctx.discord().http, mute_role.unwrap()).await?;
+    member
+        .remove_role(&ctx.discord().http, mute_role.unwrap())
+        .await?;
 
     database::add_moderation(
-        &ctx.data().database, 
-        guild_id, 
-        user.id, 
+        &ctx.data().database,
+        guild_id,
+        user.id,
         moderator.id,
-        ModerationType::Unmute, 
-        administered_at, 
-        None, 
-        reason.as_deref()
-    ).await?;
+        ModerationType::Unmute,
+        administered_at,
+        None,
+        reason.as_deref(),
+    )
+    .await?;
 
     Ok(())
 }
 
 fn unmute_help() -> String {
-    String::from("Mute a user (with an optional specified time).
+    String::from(
+        "Mute a user (with an optional specified time).
 Example: %mute @Joshument#0001 3d keeps procrastinating on the modlogs command
-        ")
+        ",
+    )
 }
-
 
 /// Get the mod logs for a specified user
 #[poise::command(
@@ -722,7 +867,7 @@ Example: %mute @Joshument#0001 3d keeps procrastinating on the modlogs command
     slash_command,
     required_permissions = "KICK_MEMBERS",
     help_text_fn = "modlogs_help",
-    category = "moderation",
+    category = "moderation"
 )]
 pub async fn modlogs(
     ctx: crate::Context<'_>,
@@ -731,25 +876,29 @@ pub async fn modlogs(
 ) -> Result<(), crate::DynError> {
     let page = match page {
         Some(page) => page,
-        None => 1
+        None => 1,
     };
 
     let max_page = database::get_modlog_count(
-        &ctx.data().database, 
-        ctx.guild_id().expect("Failed to get guild id!"), 
+        &ctx.data().database,
+        ctx.guild_id().expect("Failed to get guild id!"),
         user.id,
-    ).await? / 10 + 1;
+    )
+    .await?
+        / 10
+        + 1;
     let modlog_page = database::get_modlog_page(
-        &ctx.data().database, 
-        ctx.guild_id().expect("Failed to get guild id!"), 
-        user.id, 
-        page, 
-        10
-    ).await?;
+        &ctx.data().database,
+        ctx.guild_id().expect("Failed to get guild id!"),
+        user.id,
+        page,
+        10,
+    )
+    .await?;
 
-    ctx.send(|m| m
-        .embed(|e| {
-            e.title(format!("Modlogs for {}",  user.name));
+    ctx.send(|m| {
+        m.embed(|e| {
+            e.title(format!("Modlogs for {}", user.name));
 
             for modlog in modlog_page {
                 e.field(
@@ -759,32 +908,30 @@ pub async fn modlogs(
                     // checking, this is going somewhat against how you would expect this to be handled (no `Option<T>`)
                     format!(
                         "{}{}{}{}{}{}",
+                        format!("\n**Moderator:** <@{}>", modlog.moderator_id),
+                        format!("\n**Type:** {}", modlog.moderation_type,),
                         format!(
-                            "\n**Moderator:** <@{}>",
-                            modlog.moderator_id
+                            "\n**Administered At:** <t:{}:F>",
+                            modlog.administered_at.unix_timestamp()
                         ),
-                        format!(
-                            "\n**Type:** {}",
-                            modlog.moderation_type,
-                        ),
-                        format!("\n**Administered At:** <t:{}:F>", modlog.administered_at.unix_timestamp()),
                         match modlog.reason {
                             Some(reason) => format!("\n**Reason:** {}", reason),
                             None => String::new(),
                         },
                         match modlog.expiry_date {
-                            Some(expiration) => format!("\n**Expires:** <t:{}:F>", expiration.unix_timestamp()),
-                            None => String::new()
+                            Some(expiration) =>
+                                format!("\n**Expires:** <t:{}:F>", expiration.unix_timestamp()),
+                            None => String::new(),
                         },
                         match modlog.moderation_type {
                             ModerationType::Kick
                             | ModerationType::Unban
                             | ModerationType::Unmute
                             | ModerationType::Untimeout => String::new(),
-                            _ => format!("\n**Active:** {}", modlog.active)
+                            _ => format!("\n**Active:** {}", modlog.active),
                         }
                     ),
-                    false
+                    false,
                 );
             }
 
@@ -792,13 +939,16 @@ pub async fn modlogs(
 
             e
         })
-    ).await?;
+    })
+    .await?;
 
     Ok(())
 }
 
 fn modlogs_help() -> String {
-    String::from("Get the mod logs for the specified user.
+    String::from(
+        "Get the mod logs for the specified user.
 Example: %modlogs @Joshument#0001 1
-        ")
+        ",
+    )
 }

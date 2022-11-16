@@ -1,27 +1,30 @@
 use crate::colors;
 
 use poise::serenity_prelude;
-use serenity_prelude::{Timestamp};
+use serenity_prelude::Timestamp;
 
 /// Get the latency of the bot (in milliseconds)
 #[poise::command(
-    prefix_command, 
+    prefix_command,
     slash_command,
     help_text_fn = "ping_help",
-    category = "meta",
+    category = "meta"
 )]
-pub async fn ping(
-    ctx: crate::Context<'_>,
-) -> Result<(), crate::DynError> {
-    let response_time_ms = Timestamp::now().timestamp_millis() - ctx.created_at().timestamp_millis();
+pub async fn ping(ctx: crate::Context<'_>) -> Result<(), crate::DynError> {
+    let response_time_ms =
+        Timestamp::now().timestamp_millis() - ctx.created_at().timestamp_millis();
 
     ctx.send(|m| {
-        m.embed(|e| e
-            .color(colors::GREEN)
-            .field("Pong!", format!("Reply time: {}ms", response_time_ms), true)
-        )
+        m.embed(|e| {
+            e.color(colors::GREEN).field(
+                "Pong!",
+                format!("Reply time: {}ms", response_time_ms),
+                true,
+            )
+        })
         .ephemeral(true)
-    }).await?;
+    })
+    .await?;
 
     Ok(())
 }
@@ -35,7 +38,7 @@ fn ping_help() -> String {
     prefix_command,
     slash_command,
     help_text_fn = "info_help",
-    category = "meta",
+    category = "meta"
 )]
 pub async fn info(ctx: crate::Context<'_>) -> Result<(), crate::DynError> {
     let uptime = &ctx.data().uptime.elapsed();

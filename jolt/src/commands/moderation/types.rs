@@ -34,7 +34,11 @@ impl std::error::Error for ModlogNotInGuild {}
 
 impl std::fmt::Display for ModlogNotInGuild {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "modlog {} does not belong to guild **{}**", self.0, self.1.name)
+        write!(
+            f,
+            "modlog {} does not belong to guild **{}**",
+            self.0, self.1.name
+        )
     }
 }
 
@@ -79,7 +83,7 @@ impl TryFrom<u8> for ModerationType {
             5 => Ok(ModerationType::Unmute),
             6 => Ok(ModerationType::Untimeout),
             7 => Ok(ModerationType::Unban),
-            _ => Err(IntEnumError)
+            _ => Err(IntEnumError),
         }
     }
 }
@@ -122,7 +126,11 @@ impl std::error::Error for PageOutOfBounds {}
 
 impl std::fmt::Display for PageOutOfBounds {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "attempted to access page {} when maximum page is {}", self.0, self.1)
+        write!(
+            f,
+            "attempted to access page {} when maximum page is {}",
+            self.0, self.1
+        )
     }
 }
 
