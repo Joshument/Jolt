@@ -1,7 +1,7 @@
 /*
 Moderation commands
 
-Probably the most important part of the server, as these are essential for managing any server at all.
+Probably the most important part of the bot, as these are essential for managing any server at all.
 Each command follows the same sort of format:
     - Get the guild id,
     - Get the moderator id,
@@ -221,7 +221,6 @@ pub async fn ban(
     if is_member_moderator(&ctx.discord().cache, &member)? {
         return Err(Box::new(MemberIsModerator(member)));
     }
-
 
     let dm_channel = user.create_dm_channel(&ctx.discord().http).await?;
 
