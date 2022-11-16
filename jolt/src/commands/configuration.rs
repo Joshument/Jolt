@@ -44,7 +44,7 @@ Example: %muterole @Muted
     ")
 }
 
-/// Set or change the mute role of the server
+/// Set or change the logging channel of the server
 #[poise::command(
     prefix_command,
     slash_command,
@@ -74,6 +74,6 @@ pub async fn logs_channel(
 
 fn logs_channel_help() -> String {
     String::from("Set or change the logs channel for the server
-Example: %muterole #logs
+Example: %logschannel #logs
     ")
 }

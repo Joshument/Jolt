@@ -81,12 +81,17 @@ async fn on_error(err: crate::FrameworkError<'_>) {
     };
 
     // Just sends an embed for the error instead of the message it's supposed to send
-    err.ctx().expect("Failed to get context of error!").send(|m| m
-        .embed(|e| e
-            .color(colors::RED)
-                .field("Error!", error_message, false)
-        )
-    ).await.expect("Failed to send the error message!");
+    match err.ctx() {
+        Some(ctx) => { 
+            ctx.send(|m| m
+                .embed(|e| e
+                    .color(colors::RED)
+                        .field("Error!", error_message, false)
+                )
+            ).await.expect("Failed to send the error message!");
+        },
+        None => println!("{}", error_message),
+    };
 }
 
 

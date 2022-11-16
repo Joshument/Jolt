@@ -107,6 +107,13 @@ pub async fn delwarn(
 
     database::clear_single_moderation(&ctx.data().database, id).await?;
 
+    ctx.send(|m| {
+        m.embed(|e| e
+            .color(crate::colors::GREEN)
+            .field("Done!", &format!("Deleted warning **{id}**"), true)
+        )
+    }).await?;
+
     Ok(())
 }
 
@@ -626,7 +633,7 @@ Example: %mute @Joshument#0001 3d keeps procrastinating on the modlogs command
 }
 
 
-/// Mute a user (with an optional specified time)
+/// Unmute a user
 #[poise::command(
     prefix_command,
     slash_command,
