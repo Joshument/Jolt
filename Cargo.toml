@@ -1,5 +1,4 @@
 [workspace]
 members = [
-    "jolt",
-    "jolt_proc_macros"
+    "jolt"
 ]

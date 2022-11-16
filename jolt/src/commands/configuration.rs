@@ -1,4 +1,6 @@
 // guild-specific configuration commands
+
+// TODO: add command for setting server prefix (backend is already finished)
 use poise::serenity_prelude;
 
 use crate::colors;

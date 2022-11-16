@@ -20,7 +20,7 @@ use commands::moderation::*;
 // This gets the current git commit hash for development builds. See the build.rs file for more information on how this is obtained.
 const VERSION: &str = concat!("git-", env!("GIT_HASH"));
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 struct Config {
     token: String,
     prefix: String,
@@ -52,6 +52,7 @@ impl serenity_prelude::EventHandler for Handler {
 
 pub struct Data {
     database: Arc<sqlx::SqlitePool>,
+    config: Config,
     uptime: Instant,
 }
 
@@ -59,6 +60,7 @@ pub struct Data {
 // Prevents a lot of boilerplate as things like Context will always be used with the same 2 types.
 pub type DynError = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, DynError>;
+pub type PartialContext<'a> = poise::PartialContext<'a, Data, DynError>;
 pub type FrameworkError<'a> = poise::FrameworkError<'a, Data, DynError>;
 
 async fn on_error(err: crate::FrameworkError<'_>) {
@@ -95,6 +97,20 @@ async fn on_error(err: crate::FrameworkError<'_>) {
         }
         None => println!("{}", error_message),
     };
+}
+
+pub async fn dynamic_prefix(ctx: PartialContext<'_>) -> Result<Option<String>, DynError> {
+    let prefix = database::get_prefix(
+        &ctx.data.database, 
+        ctx.guild_id.expect("Failed to get guild ID!")
+    ).await;
+
+    let prefix = match prefix {
+        Some(prefix) => prefix,
+        None => ctx.data.config.prefix.clone()
+    };
+
+    Ok(Some(prefix))
 }
 
 #[tokio::main]
@@ -150,13 +166,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 logs_channel(),
             ],
             prefix_options: PrefixFrameworkOptions {
-                prefix: Some(config.prefix),
+                prefix: Some(config.prefix.clone()),
+                dynamic_prefix: Some(|ctx| Box::pin(dynamic_prefix(ctx))),
                 ..Default::default()
             },
             on_error: |error| Box::pin(on_error(error)),
             ..Default::default()
         })
-        .token(config.token)
+        .token(&config.token)
         .intents(GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT)
         .user_data_setup(
             move |ctx, _ready, framework| {
@@ -228,6 +245,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                     Ok(Data {
                         database,
+                        config: config.clone(),
                         uptime,
                     }
                 )})

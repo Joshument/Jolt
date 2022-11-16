@@ -193,6 +193,22 @@ pub async fn get_logs_channel(
     }
 }
 
+pub async fn get_prefix(
+    database: &sqlx::SqlitePool,
+    guild_id: impl Into<GuildId>
+) -> Option<String> {
+    let guild_id_i64 = guild_id.into().0 as i64;
+
+    let entry = sqlx::query!(
+        "SELECT prefix FROM guild_settings WHERE guild_id=?",
+        guild_id_i64
+    )
+    .fetch_one(database)
+    .await.expect("Could not get prefix for server!");
+
+    entry.prefix
+}
+
 pub async fn get_modlog_count(
     database: &sqlx::SqlitePool,
     guild_id: impl Into<GuildId>,
