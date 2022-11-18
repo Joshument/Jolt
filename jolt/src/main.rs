@@ -1,6 +1,7 @@
 mod colors;
 mod commands;
 mod database;
+mod messages;
 
 use std::error::Error;
 use std::sync::Arc;
@@ -94,8 +95,7 @@ async fn on_error(err: crate::FrameworkError<'_>) {
     // Just sends an embed for the error instead of the message it's supposed to send
     match err.ctx() {
         Some(ctx) => {
-            ctx.send(|m| m.embed(|e| e.color(colors::RED).field("Error!", error_message, false)))
-                .await
+            messages::send_error(&ctx, &error_message).await
                 .expect("Failed to send the error message!");
         }
         None => println!("{}", error_message),

@@ -5,11 +5,12 @@ mod types;
 
 use std::time::Duration;
 
-use poise::serenity_prelude;
+use poise::serenity_prelude::{self, ArgumentConvert};
 
 use crate::colors;
 use crate::commands::configuration::types::*;
 use crate::database;
+use crate::messages::send_error;
 
 /// Set or change the mute role of the server
 #[poise::command(
@@ -161,52 +162,58 @@ pub async fn setup(ctx: crate::Context<'_>) -> Result<(), crate::DynError> {
 
         Ok(response.content.clone())
     }
+    
+    async fn setup_message(
+        ctx: &crate::Context<'_>,
+        title: &str,
+        description: &str
+    ) -> Result<(), serenity_prelude::Error> {
+        ctx.send(|m| {
+            m.embed(|e| {
+                e.color(colors::GREEN)
+                    .title(title)
+                    .description(description)
+            })
+        }).await?;
+
+        Ok(())
+    }
 
     let guild_id = ctx.guild_id().expect("Could not get guild ID!");
-    ctx.send(|m| {
-        m.embed(|e| {
-            e.color(colors::GREEN).title("Setup").description(
-                "Welcome! This command will guide you through the general setup of the server. \
-                    If at any time you would like to quit, please respond with `quit`. \
-                    You may also skip the option by responding with `*`.",
-            )
-        })
-    })
-    .await?;
 
-    ctx.send(|m| {
-        m.embed(|e| {
-            e.color(colors::GREEN)
-                .title("Prefix")
-                .description(format!(
-                    "What prefix would you like for your server? \
-                    \nYour prefix determines what will be used for **non-slash commands**. The default prefix is {}.",
-                    &ctx.data().config.prefix
-                ))
-        })
-    })
-    .await?;
+    setup_message(
+        &ctx, 
+        "Setup", 
+        "Welcome! This command will guide you through the general setup of the server. \
+        If at any time you would like to quit, please respond with `quit`. \
+        You may also skip the option by responding with `*`."
+    ).await?;
+
+    setup_message(
+        &ctx, 
+        "Prefix", 
+        &format!(
+            "What prefix would you like for your server? \
+            \nYour prefix determines what will be used for **non-slash commands**. The default prefix is {}.",
+            &ctx.data().config.prefix
+        )
+    ).await?;
 
     let prefix = get_answer(&ctx, Duration::from_secs(30)).await?;
     if prefix != "*" {
         database::set_prefix(&ctx.data().database, guild_id, &prefix).await?;
     }
 
-    ctx.send(|m| {
-        m.embed(|e| {
-            e.color(colors::GREEN)
-                .title("Logs Channel")
-                .description(format!(
-                    "What channel would you like to be the logs channel? \
-                    \nThe logs channel is where **moderation actions** will be logged. \
-                    This can be important when it comes to knowing which actions have been done in your server. \
-                    \nBy default, there is no logs channel.",
-                ))
-        })
-    })
-    .await?;
+    setup_message(
+        &ctx, 
+        "Logs Channel", 
+        "What channel would you like to be the logs channel? \n\
+        The logs channel is where **moderation actions** will be logged. \
+        This can be important when it comes to knowing which actions have been done in your server. \n\
+        By default, there is no logs channel.",
+    ).await?;
 
-    let mut logs_channel_global: Option<serenity_prelude::ChannelId> = None;
+    let mut maybe_logs_channel: Option<serenity_prelude::ChannelId> = None;
     loop {
         let logs_channel = get_answer(&ctx, Duration::from_secs(30)).await?;
         if logs_channel == "*" {
@@ -214,25 +221,12 @@ pub async fn setup(ctx: crate::Context<'_>) -> Result<(), crate::DynError> {
         }
 
         let channel_id: serenity_prelude::ChannelId = {
-            let stripped_id = logs_channel
-                .strip_prefix("<#")
-                .unwrap_or(&logs_channel)
-                .strip_suffix(">")
-                .unwrap_or(&logs_channel);
+            let id = serenity_prelude::ChannelId::convert(&ctx.discord(), Some(guild_id), None, &logs_channel).await;
 
-            let id_raw: Result<u64, _> = stripped_id.parse();
-
-            match id_raw {
-                Ok(id) => serenity_prelude::ChannelId(id),
+            match id {
+                Ok(id) => id,
                 Err(_) => {
-                    ctx.send(|m| {
-                        m.embed(|e| {
-                            e.color(colors::RED)
-                                .title("Error!")
-                                .description("Please enter a valid channel id!")
-                        })
-                    })
-                    .await?;
+                    send_error(&ctx, "Please provide a valid channel!").await?;
                     continue;
                 }
             }
@@ -244,24 +238,19 @@ pub async fn setup(ctx: crate::Context<'_>) -> Result<(), crate::DynError> {
             channel_id,
         )
         .await?;
-        logs_channel_global = Some(channel_id);
+        maybe_logs_channel = Some(channel_id);
         break;
     }
 
-    ctx.send(|m| {
-        m.embed(|e| {
-            e.color(colors::GREEN)
-                .title("Logs Channel")
-                .description(format!(
-                    "What role would you like to use for the mute role? \
-                    The mute role is given to users who have been muted, as a way to change their permissions \
-                    (typically to remove their ability to talk). By default, there is no set mute role."
-                ))
-        })
-    })
-    .await?;
+    setup_message(
+        &ctx, 
+        "Mute Role", 
+        "What role would you like to use for the mute role? \
+        The mute role is given to users who have been muted, as a way to change their permissions \
+        (typically to remove their ability to talk). By default, there is no set mute role.",
+    ).await?;
 
-    let mut mute_role_global: Option<serenity_prelude::RoleId> = None;
+    let mut maybe_mute_role: Option<serenity_prelude::RoleId> = None;
     loop {
         let mute_role = get_answer(&ctx, Duration::from_secs(30)).await?;
         if mute_role == "*" {
@@ -269,25 +258,12 @@ pub async fn setup(ctx: crate::Context<'_>) -> Result<(), crate::DynError> {
         }
 
         let mute_role_id: serenity_prelude::RoleId = {
-            let stripped_id = mute_role
-                .strip_prefix("<@&")
-                .unwrap_or(&mute_role)
-                .strip_suffix(">")
-                .unwrap_or(&mute_role);
+            let id = serenity_prelude::RoleId::convert(&ctx.discord(), Some(guild_id), None, &mute_role).await;
 
-            let id_raw: Result<u64, _> = stripped_id.parse();
-
-            match id_raw {
-                Ok(id) => serenity_prelude::RoleId(id),
+            match id {
+                Ok(id) => id,
                 Err(_) => {
-                    ctx.send(|m| {
-                        m.embed(|e| {
-                            e.color(colors::RED)
-                                .title("Error!")
-                                .description("Please enter a valid role id!")
-                        })
-                    })
-                    .await?;
+                    send_error(&ctx, "Please provide a valid role!").await?;
                     continue;
                 }
             }
@@ -299,7 +275,7 @@ pub async fn setup(ctx: crate::Context<'_>) -> Result<(), crate::DynError> {
             mute_role_id,
         )
         .await?;
-        mute_role_global = Some(mute_role_id);
+        maybe_mute_role = Some(mute_role_id);
         break;
     }
 
@@ -310,20 +286,20 @@ pub async fn setup(ctx: crate::Context<'_>) -> Result<(), crate::DynError> {
                 .description(format!(
                     " \
                 **Prefix**: {} \n\
-                **Logs Channel**: <#{}> \n\
-                **Mute Role**: <@&{}>",
+                **Logs Channel**: {} \n\
+                **Mute Role**: {}",
                     if prefix != "*" {
                         prefix
                     } else {
                         String::from("Skipped")
                     },
-                    if let Some(channel) = logs_channel_global {
-                        channel.0.to_string()
+                    if let Some(channel) = maybe_logs_channel {
+                        format!("<#{}>", channel.0.to_string())
                     } else {
                         String::from("Skipped")
                     },
-                    if let Some(role) = mute_role_global {
-                        role.0.to_string()
+                    if let Some(role) = maybe_mute_role {
+                        format!("<@&{}>", role.0.to_string())
                     } else {
                         String::from("Skipped")
                     }
