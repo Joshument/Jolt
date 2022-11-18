@@ -10,5 +10,5 @@ pub enum SetupError {
     /// An error representing a cancelled operation.
     /// This is typically used when an action is cancelled by the user.
     #[error("Operation cancelled by user!")]
-    OperationCancelled
+    OperationCancelled,
 }

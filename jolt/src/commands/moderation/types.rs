@@ -1,5 +1,5 @@
-use poise::serenity_prelude;
 use crate::error::Error;
+use poise::serenity_prelude;
 
 #[derive(Copy, Clone, PartialEq, PartialOrd)]
 #[repr(u8)]

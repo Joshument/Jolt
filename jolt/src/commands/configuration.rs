@@ -160,19 +160,14 @@ pub async fn setup(ctx: crate::Context<'_>) -> Result<(), crate::DynError> {
 
         Ok(response.content.clone())
     }
-    
+
     async fn setup_message(
         ctx: &crate::Context<'_>,
         title: &str,
-        description: &str
+        description: &str,
     ) -> Result<(), serenity_prelude::Error> {
-        ctx.send(|m| {
-            m.embed(|e| {
-                e.color(colors::GREEN)
-                    .title(title)
-                    .description(description)
-            })
-        }).await?;
+        ctx.send(|m| m.embed(|e| e.color(colors::GREEN).title(title).description(description)))
+            .await?;
 
         Ok(())
     }
@@ -180,12 +175,13 @@ pub async fn setup(ctx: crate::Context<'_>) -> Result<(), crate::DynError> {
     let guild_id = ctx.guild_id().expect("Could not get guild ID!");
 
     setup_message(
-        &ctx, 
-        "Setup", 
+        &ctx,
+        "Setup",
         "Welcome! This command will guide you through the general setup of the server. \
         If at any time you would like to quit, please respond with `quit`. \
-        You may also skip the option by responding with `*`."
-    ).await?;
+        You may also skip the option by responding with `*`.",
+    )
+    .await?;
 
     setup_message(
         &ctx, 
@@ -221,7 +217,13 @@ pub async fn setup(ctx: crate::Context<'_>) -> Result<(), crate::DynError> {
         }
 
         let channel_id: serenity_prelude::ChannelId = {
-            let id = serenity_prelude::ChannelId::convert(&ctx.discord(), Some(guild_id), None, &logs_channel).await;
+            let id = serenity_prelude::ChannelId::convert(
+                &ctx.discord(),
+                Some(guild_id),
+                None,
+                &logs_channel,
+            )
+            .await;
 
             match id {
                 Ok(id) => id,
@@ -243,12 +245,13 @@ pub async fn setup(ctx: crate::Context<'_>) -> Result<(), crate::DynError> {
     }
 
     setup_message(
-        &ctx, 
-        "Mute Role", 
+        &ctx,
+        "Mute Role",
         "What role would you like to use for the mute role? \
         The mute role is given to users who have been muted, as a way to change their permissions \
         (typically to remove their ability to talk). By default, there is no set mute role.",
-    ).await?;
+    )
+    .await?;
 
     let mut maybe_mute_role: Option<serenity_prelude::RoleId> = None;
     loop {
@@ -258,7 +261,9 @@ pub async fn setup(ctx: crate::Context<'_>) -> Result<(), crate::DynError> {
         }
 
         let mute_role_id: serenity_prelude::RoleId = {
-            let id = serenity_prelude::RoleId::convert(&ctx.discord(), Some(guild_id), None, &mute_role).await;
+            let id =
+                serenity_prelude::RoleId::convert(&ctx.discord(), Some(guild_id), None, &mute_role)
+                    .await;
 
             match id {
                 Ok(id) => id,

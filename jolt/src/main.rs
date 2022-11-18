@@ -1,8 +1,8 @@
 mod colors;
 mod commands;
 mod database;
-mod messages;
 mod error;
+mod messages;
 
 use std::error::Error;
 use std::sync::Arc;
@@ -87,7 +87,7 @@ async fn on_error(err: crate::FrameworkError<'_>) {
                 )
             )
         }
-        poise::FrameworkError::UnknownCommand {..} => return,
+        poise::FrameworkError::UnknownCommand { .. } => return,
         _ => String::from(format!(
             "error is not intentional; please send this to the developers (/info): {}",
             err
@@ -97,7 +97,8 @@ async fn on_error(err: crate::FrameworkError<'_>) {
     // Just sends an embed for the error instead of the message it's supposed to send
     match err.ctx() {
         Some(ctx) => {
-            messages::send_error(&ctx, &error_message).await
+            messages::send_error(&ctx, &error_message)
+                .await
                 .expect("Failed to send the error message!");
         }
         None => println!("{}", error_message),

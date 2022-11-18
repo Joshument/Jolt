@@ -4,8 +4,8 @@ use crate::commands::moderation::error as moderation_error;
 pub use configuration_error::SetupError;
 pub use moderation_error::ModerationError;
 pub use poise::serenity_prelude::SerenityError;
-pub use sqlx::error::Error as SqlxError;
 pub use poise::FrameworkError;
+pub use sqlx::error::Error as SqlxError;
 
 /// General error struct for all variants in the program
 #[derive(thiserror::Error, Debug)]
@@ -28,7 +28,7 @@ pub enum Error {
     #[error(transparent)]
     SqlxError(#[from] SqlxError),
     /// Errors related to setup related problems.
-    #[error("transparent")]
+    #[error(transparent)]
     SetupError(#[from] SetupError),
     /// Errors related to moderation command problems
     #[error(transparent)]

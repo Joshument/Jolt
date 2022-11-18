@@ -12,8 +12,8 @@ with any form of moderative permissions. In cases of ban / unban, the permission
 but when in doubt, go with KICK_MEMBERS.
 */
 
-pub mod types;
 pub mod error;
+pub mod types;
 mod utilities;
 
 use crate::colors;
@@ -113,7 +113,8 @@ pub async fn delwarn(
         return Err(ModerationError::ModlogNotInGuild(
             id,
             ctx.guild().expect("Failed to get guild!"),
-        ).into());
+        )
+        .into());
     }
 
     if modlog.moderation_type != ModerationType::Warning {
