@@ -85,7 +85,10 @@ async fn on_error(err: crate::FrameworkError<'_>) {
                 )
             )
         }
-        _ => String::from(format!("error is not intentional; please send this to the developers (/info): {}", err)),
+        _ => String::from(format!(
+            "error is not intentional; please send this to the developers (/info): {}",
+            err
+        )),
     };
 
     // Just sends an embed for the error instead of the message it's supposed to send
@@ -101,13 +104,14 @@ async fn on_error(err: crate::FrameworkError<'_>) {
 
 pub async fn dynamic_prefix(ctx: PartialContext<'_>) -> Result<Option<String>, DynError> {
     let prefix = database::get_prefix(
-        &ctx.data.database, 
-        ctx.guild_id.expect("Failed to get guild ID!")
-    ).await?;
+        &ctx.data.database,
+        ctx.guild_id.expect("Failed to get guild ID!"),
+    )
+    .await?;
 
     let prefix = match prefix {
         Some(prefix) => prefix,
-        None => ctx.data.config.prefix.clone()
+        None => ctx.data.config.prefix.clone(),
     };
 
     Ok(Some(prefix))
@@ -165,6 +169,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 mute_role(),
                 logs_channel(),
                 set_prefix(),
+                setup(),
             ],
             prefix_options: PrefixFrameworkOptions {
                 dynamic_prefix: Some(|ctx| Box::pin(dynamic_prefix(ctx))),
