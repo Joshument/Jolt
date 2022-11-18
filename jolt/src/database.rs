@@ -6,7 +6,8 @@ In all technicality, you don't even need to know SQL if you don't intend to touc
 use poise::serenity_prelude::{self, ChannelId};
 use serenity_prelude::{GuildId, RoleId, Timestamp, UserId};
 
-use crate::commands::moderation::types::{ModerationType, ModlogEntry, PageOutOfBounds};
+use crate::commands::moderation::types::{ModerationType, ModlogEntry};
+use crate::error::Error;
 
 /// Sets all existing moderations of the type `ModerationType` to inactive.
 pub async fn clear_moderations(
@@ -262,7 +263,7 @@ pub async fn get_modlog_page(
     let offset: i64 = (page * page_size - page_size).try_into()?;
 
     if query_count < page * page_size - page_size {
-        return Err(Box::new(PageOutOfBounds(page, page_size / 10 + 1)));
+        return Err(Box::new(Error::PageOutOfBounds(page, page_size / 10 + 1)));
     }
 
     let modlogs_raw = sqlx::query!(
@@ -333,7 +334,7 @@ pub async fn get_warning_page(
     let offset: i64 = (page * page_size - page_size).try_into()?;
 
     if query_count < page * page_size - page_size {
-        return Err(Box::new(PageOutOfBounds(page, page_size / 10 + 1)));
+        return Err(Box::new(Error::PageOutOfBounds(page, page_size / 10 + 1)));
     }
 
     let modlogs_raw = sqlx::query!(

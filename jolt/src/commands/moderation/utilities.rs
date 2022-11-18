@@ -17,7 +17,7 @@ pub async fn send_moderation_messages(
     dm_fail_message: &str,
     dm_fail_color: u32,
     reason: Option<&str>,
-) -> Result<(), crate::DynError> {
+) -> Result<(), crate::error::Error> {
     let dm_success = dm_channel
         .send_message(&ctx.discord().http, |m| {
             m.embed(|e| {
@@ -91,7 +91,7 @@ pub fn append_expiry_date(
 pub fn is_member_moderator(
     cache: &serenity_prelude::Cache,
     member: &serenity_prelude::Member,
-) -> Result<bool, crate::DynError> {
+) -> Result<bool, crate::error::Error> {
     let permissions = member.permissions(cache)?;
 
     // There has to be a better way to do this I swear to god

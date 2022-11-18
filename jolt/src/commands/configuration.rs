@@ -1,14 +1,12 @@
 // guild-specific configuration commands
 
-// TODO: add command for setting server prefix (backend is already finished)
-mod types;
+pub mod error;
 
 use std::time::Duration;
 
 use poise::serenity_prelude::{self, ArgumentConvert};
 
 use crate::colors;
-use crate::commands::configuration::types::*;
 use crate::database;
 use crate::messages::send_error;
 
@@ -147,7 +145,7 @@ pub async fn setup(ctx: crate::Context<'_>) -> Result<(), crate::DynError> {
     async fn get_answer(
         ctx: &crate::Context<'_>,
         timeout: std::time::Duration,
-    ) -> Result<String, ResponseTimedOut> {
+    ) -> Result<String, error::SetupError> {
         let response = ctx
             .channel_id()
             .await_reply(&ctx.discord().shard)
@@ -157,7 +155,7 @@ pub async fn setup(ctx: crate::Context<'_>) -> Result<(), crate::DynError> {
 
         let response = match response {
             Some(response) => Ok(response),
-            None => Err(ResponseTimedOut(timeout)),
+            None => Err(error::SetupError::ResponseTimedOut(timeout)),
         }?;
 
         Ok(response.content.clone())
@@ -200,10 +198,11 @@ pub async fn setup(ctx: crate::Context<'_>) -> Result<(), crate::DynError> {
     ).await?;
 
     let prefix = get_answer(&ctx, Duration::from_secs(30)).await?;
-    if prefix != "*" {
+    if prefix == "quit" {
+        return Err(Box::new(error::SetupError::OperationCancelled));
+    } else if prefix != "*" {
         database::set_prefix(&ctx.data().database, guild_id, &prefix).await?;
     }
-
     setup_message(
         &ctx, 
         "Logs Channel", 
@@ -213,6 +212,7 @@ pub async fn setup(ctx: crate::Context<'_>) -> Result<(), crate::DynError> {
         By default, there is no logs channel.",
     ).await?;
 
+    // This CANNOT be the best way to do this I swear to god
     let mut maybe_logs_channel: Option<serenity_prelude::ChannelId> = None;
     loop {
         let logs_channel = get_answer(&ctx, Duration::from_secs(30)).await?;

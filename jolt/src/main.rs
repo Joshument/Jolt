@@ -2,6 +2,7 @@ mod colors;
 mod commands;
 mod database;
 mod messages;
+mod error;
 
 use std::error::Error;
 use std::sync::Arc;
@@ -86,6 +87,7 @@ async fn on_error(err: crate::FrameworkError<'_>) {
                 )
             )
         }
+        poise::FrameworkError::UnknownCommand {..} => return,
         _ => String::from(format!(
             "error is not intentional; please send this to the developers (/info): {}",
             err

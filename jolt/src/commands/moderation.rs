@@ -13,12 +13,14 @@ but when in doubt, go with KICK_MEMBERS.
 */
 
 pub mod types;
+pub mod error;
 mod utilities;
 
 use crate::colors;
 use crate::commands::moderation::types::*;
 use crate::commands::moderation::utilities::*;
 use crate::database;
+use crate::error::{Error, ModerationError};
 
 use poise::serenity_prelude;
 
@@ -43,7 +45,7 @@ pub async fn warn(
 
     let member = guild_id.member(&ctx.discord(), user.id).await?;
     if is_member_moderator(&ctx.discord().cache, &member)? {
-        return Err(Box::new(MemberIsModerator(member)));
+        return Err(ModerationError::MemberIsModerator(member).into());
     }
 
     let dm_channel = user.create_dm_channel(&ctx.discord().http).await?;
@@ -108,14 +110,14 @@ pub async fn delwarn(
     let modlog = database::get_single_modlog(&ctx.data().database, id).await?;
 
     if modlog.guild_id != ctx.guild_id().expect("Failed to get guild id!") {
-        return Err(Box::new(ModlogNotInGuild(
+        return Err(ModerationError::ModlogNotInGuild(
             id,
             ctx.guild().expect("Failed to get guild!"),
-        )));
+        ).into());
     }
 
     if modlog.moderation_type != ModerationType::Warning {
-        return Err(Box::new(NotAWarning(id)));
+        return Err(ModerationError::NotAWarning(id).into());
     }
 
     database::clear_single_moderation(&ctx.data().database, id).await?;
@@ -248,7 +250,7 @@ pub async fn ban(
 
     let member = guild_id.member(&ctx.discord(), user.id).await?;
     if is_member_moderator(&ctx.discord().cache, &member)? {
-        return Err(Box::new(MemberIsModerator(member)));
+        return Err(ModerationError::MemberIsModerator(member).into());
     }
 
     let dm_channel = user.create_dm_channel(&ctx.discord().http).await?;
@@ -405,7 +407,7 @@ pub async fn kick(
 
     let member = guild_id.member(&ctx.discord(), user.id).await?;
     if is_member_moderator(&ctx.discord().cache, &member)? {
-        return Err(Box::new(MemberIsModerator(member)));
+        return Err(ModerationError::MemberIsModerator(member).into());
     }
 
     let dm_channel = user.create_dm_channel(&ctx.discord()).await?;
@@ -487,6 +489,11 @@ pub async fn timeout(
     let expiry_date = serenity_prelude::Timestamp::from_unix_timestamp(
         administered_at.unix_timestamp() + length.as_secs() as i64,
     )?;
+
+    let member = guild_id.member(&ctx.discord(), user.id).await?;
+    if is_member_moderator(&ctx.discord().cache, &member)? {
+        return Err(ModerationError::MemberIsModerator(member).into());
+    }
 
     let dm_channel = user.create_dm_channel(&ctx.discord()).await?;
 
@@ -669,14 +676,12 @@ pub async fn mute(
 
     let member = guild_id.member(&ctx.discord(), user.id).await?;
     if is_member_moderator(&ctx.discord().cache, &member)? {
-        return Err(Box::new(MemberIsModerator(member)));
+        return Err(ModerationError::MemberIsModerator(member).into());
     }
 
     let mute_role = database::get_mute_role(&ctx.data().database, guild_id).await?;
     if let None = mute_role {
-        return Err(Box::new(types::ConfigNotSetError(String::from(
-            "%muterole",
-        ))));
+        return Err(Error::ConfigNotSetError(String::from("%muterole")).into());
     }
 
     let administered_at = ctx.created_at();
