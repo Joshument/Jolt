@@ -1,6 +1,6 @@
 use crate::error::Error;
-use poise::serenity_prelude::{self, GuildId, Timestamp, UserId};
-use sqlx::{sqlite::SqliteRow, FromRow, Row, Sqlite};
+use poise::serenity_prelude::{GuildId, Timestamp, UserId};
+use sqlx::{sqlite::SqliteRow, FromRow, Row};
 
 #[derive(Copy, Clone, PartialEq, PartialOrd)]
 #[repr(u8)]

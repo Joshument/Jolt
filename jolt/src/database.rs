@@ -3,14 +3,9 @@ This file provides a lot of syntatic sugar around database access to make it eas
 In all technicality, you don't even need to know SQL if you don't intend to touch this file. You're welcome
 */
 
-use std::ops::Deref;
-
 use poise::serenity_prelude::{self, ChannelId};
 use serenity_prelude::{GuildId, RoleId, Timestamp, UserId};
-use sqlx::sqlite::{SqliteArguments, SqliteRow};
-use sqlx::{query, Sqlite};
 
-use crate::commands::moderation::modlogs;
 use crate::commands::moderation::types::{ModerationType, ModlogEntry};
 use crate::error::Error;
 
