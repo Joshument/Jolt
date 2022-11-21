@@ -1,7 +1,11 @@
 use poise::serenity_prelude;
+use poise::serenity_prelude::CreateEmbed;
 
 use crate::colors;
 use crate::database;
+
+use super::types::ModerationType;
+use super::types::ModlogEntry;
 
 /// Send a moderation message using the same reusable fields.
 /// This function exists to reduce boilerplate, as it's much easier to just give a function parameters than to
@@ -110,4 +114,45 @@ pub fn is_member_moderator(
         || permissions.manage_webhooks()
         || permissions.manage_threads()
         || permissions.moderate_members())
+}
+
+// Formats a CreateEmbed into a modlog format
+pub fn modlog_embed(embed: &mut CreateEmbed, modlogs: Vec<ModlogEntry>) -> &mut CreateEmbed {
+    for modlog in modlogs {
+        println!("{:?}\n{}", modlog.expiry_date, modlog.moderation_type);
+        embed.field(
+            format!("ID {}", modlog.id),
+            // The way I omit a certain part of the moderation is to replace the segment with an empty string.
+            // This is because of the way that the field works, and since this involves display vs variable
+            // checking, this is going somewhat against how you would expect this to be handled (no `Option<T>`)
+            format!(
+                "{}{}{}{}{}{}",
+                format!("\n**Moderator:** <@{}>", modlog.moderator_id),
+                format!("\n**Type:** {}", modlog.moderation_type,),
+                format!(
+                    "\n**Administered At:** <t:{}:F>",
+                    modlog.administered_at.unix_timestamp()
+                ),
+                match modlog.reason {
+                    Some(reason) => format!("\n**Reason:** {}", reason),
+                    None => String::new(),
+                },
+                match modlog.expiry_date {
+                    Some(expiration) =>
+                        format!("\n**Expires:** <t:{}:F>", expiration.unix_timestamp()),
+                    None => String::new(),
+                },
+                match modlog.moderation_type {
+                    ModerationType::Kick
+                    | ModerationType::Unban
+                    | ModerationType::Unmute
+                    | ModerationType::Untimeout => String::new(),
+                    _ => format!("\n**Active:** {}", modlog.active),
+                }
+            ),
+            false,
+        );
+    }
+
+    embed
 }

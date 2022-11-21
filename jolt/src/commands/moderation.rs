@@ -200,7 +200,8 @@ pub async fn warnings(
                 );
             }
 
-            e.footer(|f| f.text(format!("Page {} of {}", page, max_page)));
+            e.footer(|f| f.text(format!("Page {} of {}", page, max_page)))
+                .color(colors::BLUE);
 
             e
         })
@@ -213,7 +214,7 @@ pub async fn warnings(
 fn warnings_help() -> String {
     String::from(
         "Get the warnings for the specified user.
-Example: %modlogs @Joshument#0001 1
+Example: %warnings @Joshument#0001 1
         ",
     )
 }
@@ -906,42 +907,10 @@ pub async fn modlogs(
         m.embed(|e| {
             e.title(format!("Modlogs for {}", user.name));
 
-            for modlog in modlog_page {
-                e.field(
-                    format!("ID {}", modlog.id),
-                    // The way I omit a certain part of the moderation is to replace the segment with an empty string.
-                    // This is because of the way that the field works, and since this involves display vs variable
-                    // checking, this is going somewhat against how you would expect this to be handled (no `Option<T>`)
-                    format!(
-                        "{}{}{}{}{}{}",
-                        format!("\n**Moderator:** <@{}>", modlog.moderator_id),
-                        format!("\n**Type:** {}", modlog.moderation_type,),
-                        format!(
-                            "\n**Administered At:** <t:{}:F>",
-                            modlog.administered_at.unix_timestamp()
-                        ),
-                        match modlog.reason {
-                            Some(reason) => format!("\n**Reason:** {}", reason),
-                            None => String::new(),
-                        },
-                        match modlog.expiry_date {
-                            Some(expiration) =>
-                                format!("\n**Expires:** <t:{}:F>", expiration.unix_timestamp()),
-                            None => String::new(),
-                        },
-                        match modlog.moderation_type {
-                            ModerationType::Kick
-                            | ModerationType::Unban
-                            | ModerationType::Unmute
-                            | ModerationType::Untimeout => String::new(),
-                            _ => format!("\n**Active:** {}", modlog.active),
-                        }
-                    ),
-                    false,
-                );
-            }
+            modlog_embed(e, modlog_page);
 
-            e.footer(|f| f.text(format!("Page {} of {}", page, max_page)));
+            e.footer(|f| f.text(format!("Page {} of {}", page, max_page)))
+                .color(colors::BLUE);
 
             e
         })
@@ -953,7 +922,7 @@ pub async fn modlogs(
 
 fn modlogs_help() -> String {
     String::from(
-        "Get the mod logs for the specified user.
+        "Get the modlogs for the specified user.
 Example: %modlogs @Joshument#0001 1
         ",
     )

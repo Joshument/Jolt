@@ -3,9 +3,14 @@ This file provides a lot of syntatic sugar around database access to make it eas
 In all technicality, you don't even need to know SQL if you don't intend to touch this file. You're welcome
 */
 
+use std::ops::Deref;
+
 use poise::serenity_prelude::{self, ChannelId};
 use serenity_prelude::{GuildId, RoleId, Timestamp, UserId};
+use sqlx::sqlite::{SqliteArguments, SqliteRow};
+use sqlx::{query, Sqlite};
 
+use crate::commands::moderation::modlogs;
 use crate::commands::moderation::types::{ModerationType, ModlogEntry};
 use crate::error::Error;
 
@@ -179,19 +184,13 @@ pub async fn get_logs_channel(
         "SELECT logs_channel_id FROM guild_settings WHERE guild_id=?",
         guild_id_i64
     )
-    .fetch_one(database)
-    .await;
+    .fetch_optional(database)
+    .await?;
 
-    if let Err(_) = entry {
-        return Ok(None);
-    }
-
-    let entry = entry?;
-
-    match entry.logs_channel_id {
-        Some(channel_id) => Ok(Some(ChannelId(channel_id as u64))),
-        None => Ok(None),
-    }
+    Ok(entry.and_then(|some| {
+        some.logs_channel_id
+            .map(|unwrapped| ChannelId(unwrapped as u64))
+    }))
 }
 
 pub async fn get_prefix(
@@ -233,7 +232,7 @@ pub async fn get_modlog_count(
     database: &sqlx::SqlitePool,
     guild_id: impl Into<GuildId>,
     user_id: impl Into<UserId>,
-) -> Result<usize, crate::DynError> {
+) -> Result<usize, sqlx::Error> {
     let guild_id_i64 = guild_id.into().0 as i64;
     let user_id_i64 = user_id.into().0 as i64;
 
@@ -255,46 +254,32 @@ pub async fn get_modlog_page(
     user_id: impl Into<UserId> + Copy,
     page: usize,
     page_size: usize,
-) -> Result<Vec<ModlogEntry>, crate::DynError> {
+) -> Result<Vec<ModlogEntry>, Error> {
     let guild_id_i64 = guild_id.into().0 as i64;
     let user_id_i64 = user_id.into().0 as i64;
     let query_count = get_modlog_count(database, guild_id, user_id).await?;
     let page_size_i64 = page_size as i64;
-    let offset: i64 = (page * page_size - page_size).try_into()?;
+    // I'm such a mathematician
+    let offset: i64 = (page * page_size - page_size)
+        .try_into()
+        .expect("how the hell did you go over the 64-bit integer limit in modlogs");
 
+    // stay confused because I don't remember at a glance either
     if query_count < page * page_size - page_size {
-        return Err(Box::new(Error::PageOutOfBounds(page, page_size / 10 + 1)));
+        return Err(Error::PageOutOfBounds(page, page_size / 10 + 1));
     }
 
-    let modlogs_raw = sqlx::query!(
-        "SELECT * FROM moderations WHERE guild_id=? AND user_id=? ORDER BY id DESC LIMIT ? OFFSET ?",
-        guild_id_i64,
-        user_id_i64,
-        page_size_i64,
-        offset
+    let modlogs = sqlx::query_as(
+        &format!(
+            "SELECT * FROM moderations WHERE guild_id={} AND user_id={} ORDER BY id DESC LIMIT {} OFFSET {}",
+            guild_id_i64,
+            user_id_i64,
+            page_size_i64,
+            offset
+        )
     )
     .fetch_all(database)
     .await?;
-
-    let modlogs = modlogs_raw
-        .iter()
-        .map(|modlog| ModlogEntry {
-            id: modlog.id as u64,
-            guild_id: GuildId(modlog.guild_id as u64),
-            moderation_type: (modlog.moderation_type as u8).try_into().unwrap(),
-            user_id: UserId(modlog.user_id as u64),
-            moderator_id: UserId(modlog.moderator_id as u64),
-            administered_at: serenity_prelude::Timestamp::from_unix_timestamp(
-                modlog.administered_at,
-            )
-            .unwrap(),
-            expiry_date: modlog
-                .expiry_date
-                .map(|some| serenity_prelude::Timestamp::from_unix_timestamp(some).unwrap()),
-            reason: modlog.reason.clone(),
-            active: modlog.active,
-        })
-        .collect();
 
     Ok(modlogs)
 }
@@ -303,7 +288,7 @@ pub async fn get_warning_count(
     database: &sqlx::SqlitePool,
     guild_id: impl Into<GuildId>,
     user_id: impl Into<UserId>,
-) -> Result<usize, crate::DynError> {
+) -> Result<usize, sqlx::Error> {
     let guild_id_i64 = guild_id.into().0 as i64;
     let user_id_i64 = user_id.into().0 as i64;
 
@@ -326,47 +311,33 @@ pub async fn get_warning_page(
     user_id: impl Into<UserId> + Copy,
     page: usize,
     page_size: usize,
-) -> Result<Vec<ModlogEntry>, crate::DynError> {
+) -> Result<Vec<ModlogEntry>, Error> {
     let guild_id_i64 = guild_id.into().0 as i64;
     let user_id_i64 = user_id.into().0 as i64;
-    let query_count = get_modlog_count(database, guild_id, user_id).await?;
+    let query_count = get_warning_count(database, guild_id, user_id).await?;
     let page_size_i64 = page_size as i64;
-    let offset: i64 = (page * page_size - page_size).try_into()?;
+    // I loooove math
+    let offset: i64 = (page * page_size - page_size)
+        .try_into()
+        .expect("how the hell did you get over the 64-bit integer limit in warnings");
 
+    // It works so who cares about making it readable !!!
     if query_count < page * page_size - page_size {
-        return Err(Box::new(Error::PageOutOfBounds(page, page_size / 10 + 1)));
+        return Err(Error::PageOutOfBounds(page, page_size / 10 + 1));
     }
 
-    let modlogs_raw = sqlx::query!(
-        "SELECT * FROM moderations WHERE guild_id=? AND user_id=? AND moderation_type=? AND active=TRUE ORDER BY id DESC LIMIT ? OFFSET ?",
-        guild_id_i64,
-        user_id_i64,
-        ModerationType::Warning as u8,
-        page_size_i64,
-        offset
+    let modlogs = sqlx::query_as(
+        &format!(
+            "SELECT * FROM moderations WHERE guild_id={} AND user_id={} AND moderation_type={} AND active=TRUE ORDER BY id DESC LIMIT {} OFFSET {}",
+            guild_id_i64,
+            user_id_i64,
+            ModerationType::Warning as u8,
+            page_size_i64,
+            offset
+        )
     )
     .fetch_all(database)
     .await?;
-
-    let modlogs = modlogs_raw
-        .iter()
-        .map(|modlog| ModlogEntry {
-            id: modlog.id as u64,
-            guild_id: GuildId(modlog.guild_id as u64),
-            moderation_type: (modlog.moderation_type as u8).try_into().unwrap(),
-            user_id: UserId(modlog.user_id as u64),
-            moderator_id: UserId(modlog.moderator_id as u64),
-            administered_at: serenity_prelude::Timestamp::from_unix_timestamp(
-                modlog.administered_at,
-            )
-            .unwrap(),
-            expiry_date: modlog
-                .expiry_date
-                .map(|some| serenity_prelude::Timestamp::from_unix_timestamp(some).unwrap()),
-            reason: modlog.reason.clone(),
-            active: modlog.active,
-        })
-        .collect();
 
     Ok(modlogs)
 }

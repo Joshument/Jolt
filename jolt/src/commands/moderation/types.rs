@@ -1,5 +1,6 @@
 use crate::error::Error;
-use poise::serenity_prelude;
+use poise::serenity_prelude::{self, GuildId, Timestamp, UserId};
+use sqlx::{sqlite::SqliteRow, FromRow, Row, Sqlite};
 
 #[derive(Copy, Clone, PartialEq, PartialOrd)]
 #[repr(u8)]
@@ -50,14 +51,44 @@ impl std::fmt::Display for ModerationType {
 }
 
 /// General information about an entry
+// #[derive(sqlx::FromRow)]
 pub struct ModlogEntry {
+    // #[sqlx(try_from = "i64")]
     pub id: u64,
-    pub guild_id: serenity_prelude::GuildId,
+    // #[sqlx(try_from = "i64")]
+    pub guild_id: GuildId,
+    // #[sqlx(try_from = "u8")]
     pub moderation_type: ModerationType,
-    pub user_id: serenity_prelude::UserId,
-    pub moderator_id: serenity_prelude::UserId,
-    pub administered_at: serenity_prelude::Timestamp,
-    pub expiry_date: Option<serenity_prelude::Timestamp>,
+    // #[sqlx(try_from = "i64")]
+    pub user_id: UserId,
+    // #[sqlx(try_from = "i64")]
+    pub moderator_id: UserId,
+    pub administered_at: Timestamp,
+    // #[sqlx(default)]
+    pub expiry_date: Option<Timestamp>,
+    // #[sqlx(default)]
     pub reason: Option<String>,
     pub active: bool,
+}
+
+impl FromRow<'_, SqliteRow> for ModlogEntry {
+    fn from_row(row: &SqliteRow) -> Result<Self, sqlx::Error> {
+        Ok(Self {
+            id: row.try_get::<i64, &str>("id")? as u64,
+            guild_id: GuildId(row.try_get::<i64, &str>("guild_id")? as u64),
+            moderation_type: (row.try_get::<i64, &str>("moderation_type")? as u8)
+                .try_into()
+                .unwrap(),
+            user_id: UserId(row.try_get::<i64, &str>("user_id")? as u64),
+            moderator_id: UserId(row.try_get::<i64, &str>("moderator_id")? as u64),
+            administered_at: Timestamp::from_unix_timestamp(row.try_get("administered_at")?)
+                .unwrap(),
+            expiry_date: row
+                .try_get("expiry_date")
+                .ok()
+                .map(|date| Timestamp::from_unix_timestamp(date).unwrap()),
+            reason: row.try_get("reason").ok(),
+            active: row.try_get("active")?,
+        })
+    }
 }
