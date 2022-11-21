@@ -13,7 +13,7 @@ Jolt is currently in an incomplete state, however, it is in active development. 
 - Beautify your rules and announcements using embeds via an easy to use command
 - Automatically assign roles on member join
 - Unlimited reaction roles in any channel at any time
-- Robust auto-moderation with full regex support (likely will be premium on main host due to computational power)
+- ~~Robust auto-moderation with full regex support~~ thanks for taking my idea discord
 - Allow server boosters to create their own custom roles
 - XP system with the ability to fine-tune however you like, up to and including being able to define your own XP curves
 - Auto-prune inactive members with role addition, removal, and kicks
@@ -40,6 +40,8 @@ As of now, these are the current supported commands:
 ### Configuration
 - muterole \<role>
 - logschannel \<channel>
+- setprefix \<prefix>
+- setup
 
 ## Adding your own modifications
 Jolt uses the [poise](https://docs.rs/poise/latest/poise/) crate as a framework. If you would like to add commands, it's as simple as linking your functions to the framework in `main`! Support for primitive custom commands will be added in the future if you are not a rust programmer.
