@@ -43,6 +43,13 @@ As of now, these are the current supported commands:
 - setprefix \<prefix>
 - setup
 
+## Local Setup
+finish this later!! for now this is more a reminder to myself, but:
+1. make sure you have sqlx-cli installed via `cargo install sqlx-cli`
+2. `sqlx db create`
+3. `sqlx migrate run`
+4. `cargo run`
+
 ## Adding your own modifications
 Jolt uses the [poise](https://docs.rs/poise/latest/poise/) crate as a framework. If you would like to add commands, it's as simple as linking your functions to the framework in `main`! Support for primitive custom commands will be added in the future if you are not a rust programmer.
 

@@ -73,6 +73,8 @@ pub struct ModlogEntry {
 
 impl FromRow<'_, SqliteRow> for ModlogEntry {
     fn from_row(row: &SqliteRow) -> Result<Self, sqlx::Error> {
+        let temp: Option<&str> = row.try_get("expiry_date").ok();
+        println!("{:?}", temp);
         Ok(Self {
             id: row.try_get::<i64, &str>("id")? as u64,
             guild_id: GuildId(row.try_get::<i64, &str>("guild_id")? as u64),
@@ -84,9 +86,9 @@ impl FromRow<'_, SqliteRow> for ModlogEntry {
             administered_at: Timestamp::from_unix_timestamp(row.try_get("administered_at")?)
                 .unwrap(),
             expiry_date: row
-                .try_get("expiry_date")
-                .ok()
-                .map(|date| Timestamp::from_unix_timestamp(date).unwrap()),
+                .try_get::<Option<i64>, &str>("expiry_date")
+                .expect("something weird happened")
+                .map(|some| Timestamp::from_unix_timestamp(some).unwrap()),
             reason: row.try_get("reason").ok(),
             active: row.try_get("active")?,
         })

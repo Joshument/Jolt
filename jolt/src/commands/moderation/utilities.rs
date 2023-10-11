@@ -113,7 +113,7 @@ pub fn is_member_moderator(
         || permissions.manage_roles()
         || permissions.manage_webhooks()
         || permissions.manage_threads()
-        || permissions.moderate_members())
+        || permissions.moderate_members()) 
 }
 
 // Formats a CreateEmbed into a modlog format

@@ -85,11 +85,20 @@ pub async fn add_moderation(
         .await?;
     }
 
+    // Get the highest moderation id to increment for new id
+    let id: i64 = sqlx::query!(
+        "SELECT MAX(id) AS max_id FROM moderations WHERE guild_id = ?",
+        guild_id_i64,
+    )
+        .fetch_one(database)
+        .await?.max_id.unwrap_or(0) + 1;
+
     sqlx::query!(
         "INSERT INTO moderations \
-        (guild_id, user_id, moderator_id, moderation_type, administered_at, expiry_date, reason, active) \
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (guild_id, id, user_id, moderator_id, moderation_type, administered_at, expiry_date, reason, active) \
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         guild_id_i64,
+        id,
         user_id_i64,
         moderator_id_64,
         moderation_type_u8,
@@ -98,8 +107,8 @@ pub async fn add_moderation(
         reason,
         active
     )
-    .execute(database)
-    .await?;
+        .execute(database)
+        .await?;
 
     Ok(())
 }
@@ -343,7 +352,7 @@ pub async fn get_single_modlog(database: &sqlx::SqlitePool, id: u64) -> sqlx::Re
     let modlog = sqlx::query!("SELECT * FROM moderations WHERE id=?", id)
         .fetch_one(database)
         .await?;
-
+    println!("{:?}", modlog.expiry_date);
     Ok(ModlogEntry {
         id: modlog.id as u64,
         guild_id: GuildId(modlog.guild_id as u64),
