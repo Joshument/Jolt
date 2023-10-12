@@ -17,8 +17,8 @@ pub async fn clear_moderations(
     moderation_type: ModerationType,
 ) -> sqlx::Result<()> {
     let moderation_type_u8 = moderation_type as u8;
-    let guild_id = guild_id.into().0 as i64;
-    let user_id = user_id.into().0 as i64;
+    let guild_id: i64 = guild_id.into().into();
+    let user_id: i64 = user_id.into().into();
 
     if let ModerationType::Ban | ModerationType::Mute | ModerationType::Timeout = moderation_type {
         sqlx::query!(
@@ -58,9 +58,9 @@ pub async fn add_moderation(
     expiry_date: Option<Timestamp>,
     reason: Option<&str>,
 ) -> sqlx::Result<()> {
-    let guild_id_i64 = guild_id.clone().into().0 as i64;
-    let user_id_i64 = user_id.clone().into().0 as i64;
-    let moderator_id_64 = moderator_id.into().0 as i64;
+    let guild_id_i64: i64 = guild_id.clone().into().into();
+    let user_id_i64: i64 = user_id.clone().into().into();
+    let moderator_id_64: i64 = moderator_id.into().into();
     let moderation_type_u8 = moderation_type as u8;
     let expiry_date = expiry_date.map(|date| date.unix_timestamp());
     let administered_at = administered_at.unix_timestamp();
@@ -88,18 +88,21 @@ pub async fn add_moderation(
     // Get the highest moderation id to increment for new id
     let id: i64 = sqlx::query!(
         "SELECT MAX(id) AS max_id FROM moderations WHERE guild_id = ?",
-        guild_id_i64,
+        guild_id_i64: i64,
     )
-        .fetch_one(database)
-        .await?.max_id.unwrap_or(0) + 1;
+    .fetch_one(database)
+    .await?
+    .max_id
+    .unwrap_or(0)
+        + 1;
 
     sqlx::query!(
         "INSERT INTO moderations \
         (guild_id, id, user_id, moderator_id, moderation_type, administered_at, expiry_date, reason, active) \
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        guild_id_i64,
+        guild_id_i64: i64,
         id,
-        user_id_i64,
+        user_id_i64: i64,
         moderator_id_64,
         moderation_type_u8,
         administered_at,
@@ -118,14 +121,14 @@ pub async fn set_mute_role(
     guild_id: impl Into<GuildId>,
     role_id: impl Into<RoleId>,
 ) -> sqlx::Result<()> {
-    let guild_id_i64 = guild_id.into().0 as i64;
-    let role_id_i64 = role_id.into().0 as i64;
+    let guild_id_i64: i64 = guild_id.into().into();
+    let role_id_i64: i64 = role_id.into().into();
 
     sqlx::query!(
         "INSERT INTO guild_settings (guild_id, mute_role_id) VALUES ($1, $2)
         ON CONFLICT (guild_id) DO UPDATE SET mute_role_id=excluded.mute_role_id",
-        guild_id_i64,
-        role_id_i64
+        guild_id_i64: i64,
+        role_id_i64: i64
     )
     .execute(&*database)
     .await?;
@@ -137,11 +140,11 @@ pub async fn get_mute_role(
     database: &sqlx::SqlitePool,
     guild_id: impl Into<GuildId>,
 ) -> sqlx::Result<Option<RoleId>> {
-    let guild_id_i64 = guild_id.into().0 as i64;
+    let guild_id_i64: i64 = guild_id.into().into();
 
     let entry = sqlx::query!(
         "SELECT mute_role_id FROM guild_settings WHERE guild_id=?",
-        guild_id_i64
+        guild_id_i64: i64
     )
     .fetch_one(database)
     .await;
@@ -153,7 +156,7 @@ pub async fn get_mute_role(
     let entry = entry?;
 
     match entry.mute_role_id {
-        Some(role_id) => Ok(Some(RoleId(role_id as u64))),
+        Some(role_id) => Ok(Some(RoleId::new(role_id as u64))),
         None => Ok(None),
     }
 }
@@ -163,14 +166,14 @@ pub async fn set_logs_channel(
     guild_id: impl Into<GuildId>,
     channel_id: impl Into<ChannelId>,
 ) -> sqlx::Result<()> {
-    let guild_id_i64 = guild_id.into().0 as i64;
-    let channel_id_i64 = channel_id.into().0 as i64;
+    let guild_id_i64: i64 = guild_id.into().into();
+    let channel_id_i64: i64 = channel_id.into().into();
 
     sqlx::query!(
         "INSERT INTO guild_settings (guild_id, logs_channel_id) VALUES ($1, $2)
         ON CONFLICT (guild_id) DO UPDATE SET logs_channel_id=excluded.logs_channel_id",
-        guild_id_i64,
-        channel_id_i64
+        guild_id_i64: i64,
+        channel_id_i64: i64
     )
     .execute(database)
     .await?;
@@ -182,18 +185,18 @@ pub async fn get_logs_channel(
     database: &sqlx::SqlitePool,
     guild_id: impl Into<GuildId>,
 ) -> sqlx::Result<Option<ChannelId>> {
-    let guild_id_i64 = guild_id.into().0 as i64;
+    let guild_id_i64: i64 = guild_id.into().into();
 
     let entry = sqlx::query!(
         "SELECT logs_channel_id FROM guild_settings WHERE guild_id=?",
-        guild_id_i64
+        guild_id_i64: i64
     )
     .fetch_optional(database)
     .await?;
 
     Ok(entry.and_then(|some| {
         some.logs_channel_id
-            .map(|unwrapped| ChannelId(unwrapped as u64))
+            .map(|unwrapped| ChannelId::new(unwrapped as u64))
     }))
 }
 
@@ -201,11 +204,11 @@ pub async fn get_prefix(
     database: &sqlx::SqlitePool,
     guild_id: impl Into<GuildId>,
 ) -> Result<Option<String>, sqlx::Error> {
-    let guild_id_i64 = guild_id.into().0 as i64;
+    let guild_id_i64: i64 = guild_id.into().into();
 
     let entry = sqlx::query!(
         "SELECT prefix FROM guild_settings WHERE guild_id=?",
-        guild_id_i64
+        guild_id_i64: i64
     )
     .fetch_optional(database)
     .await?;
@@ -218,12 +221,12 @@ pub async fn set_prefix(
     guild_id: impl Into<GuildId>,
     prefix: &str,
 ) -> sqlx::Result<()> {
-    let guild_id_i64 = guild_id.into().0 as i64;
+    let guild_id_i64: i64 = guild_id.into().into();
 
     sqlx::query!(
         "INSERT INTO guild_settings (guild_id, prefix) VALUES ($1, $2)
         ON CONFLICT (guild_id) DO UPDATE SET prefix=excluded.prefix",
-        guild_id_i64,
+        guild_id_i64: i64,
         prefix
     )
     .execute(database)
@@ -237,13 +240,13 @@ pub async fn get_modlog_count(
     guild_id: impl Into<GuildId>,
     user_id: impl Into<UserId>,
 ) -> Result<usize, sqlx::Error> {
-    let guild_id_i64 = guild_id.into().0 as i64;
-    let user_id_i64 = user_id.into().0 as i64;
+    let guild_id_i64: i64 = guild_id.into().into();
+    let user_id_i64: i64 = user_id.into().into();
 
     let query_count = sqlx::query!(
         "SELECT * FROM moderations WHERE guild_id=? AND user_id=?",
-        guild_id_i64,
-        user_id_i64
+        guild_id_i64: i64,
+        user_id_i64: i64
     )
     .fetch_all(database)
     .await?
@@ -259,10 +262,10 @@ pub async fn get_modlog_page(
     page: usize,
     page_size: usize,
 ) -> Result<Vec<ModlogEntry>, Error> {
-    let guild_id_i64 = guild_id.into().0 as i64;
-    let user_id_i64 = user_id.into().0 as i64;
+    let guild_id_i64: i64 = guild_id.into().into();
+    let user_id_i64: i64 = user_id.into().into();
     let query_count = get_modlog_count(database, guild_id, user_id).await?;
-    let page_size_i64 = page_size as i64;
+    let page_size_i64: i64 = page_size as i64;
     // I'm such a mathematician
     let offset: i64 = (page * page_size - page_size)
         .try_into()
@@ -293,13 +296,13 @@ pub async fn get_warning_count(
     guild_id: impl Into<GuildId>,
     user_id: impl Into<UserId>,
 ) -> Result<usize, sqlx::Error> {
-    let guild_id_i64 = guild_id.into().0 as i64;
-    let user_id_i64 = user_id.into().0 as i64;
+    let guild_id_i64: i64 = guild_id.into().into();
+    let user_id_i64: i64 = user_id.into().into();
 
     let query_count = sqlx::query!(
         "SELECT * FROM moderations WHERE guild_id=? AND user_id=? AND moderation_type=? AND active=TRUE",
-        guild_id_i64,
-        user_id_i64,
+        guild_id_i64: i64,
+        user_id_i64: i64,
         ModerationType::Warning as u8
     )
         .fetch_all(database)
@@ -316,10 +319,10 @@ pub async fn get_warning_page(
     page: usize,
     page_size: usize,
 ) -> Result<Vec<ModlogEntry>, Error> {
-    let guild_id_i64 = guild_id.into().0 as i64;
-    let user_id_i64 = user_id.into().0 as i64;
+    let guild_id_i64: i64 = guild_id.into().into();
+    let user_id_i64: i64 = user_id.into().into();
     let query_count = get_warning_count(database, guild_id, user_id).await?;
-    let page_size_i64 = page_size as i64;
+    let page_size_i64: i64 = page_size as i64;
     // I loooove math
     let offset: i64 = (page * page_size - page_size)
         .try_into()
@@ -355,10 +358,10 @@ pub async fn get_single_modlog(database: &sqlx::SqlitePool, id: u64) -> sqlx::Re
     println!("{:?}", modlog.expiry_date);
     Ok(ModlogEntry {
         id: modlog.id as u64,
-        guild_id: GuildId(modlog.guild_id as u64),
+        guild_id: GuildId::new(modlog.guild_id as u64),
         moderation_type: (modlog.moderation_type as u8).try_into().unwrap(),
-        user_id: UserId(modlog.user_id as u64),
-        moderator_id: UserId(modlog.moderator_id as u64),
+        user_id: UserId::new(modlog.user_id as u64),
+        moderator_id: UserId::new(modlog.moderator_id as u64),
         administered_at: serenity_prelude::Timestamp::from_unix_timestamp(modlog.administered_at)
             .unwrap(),
         expiry_date: modlog

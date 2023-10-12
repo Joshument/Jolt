@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-poise = "0.4.1"
+poise = { git = "https://github.com/serenity-rs/poise", branch = "serenity-next" }
 tokio = { version = "1.21.2", features = ["macros", "rt-multi-thread", "signal"] }
 serde_json = "1.0.87"
 serde = { version = "1.0.147", features = ["derive"] }

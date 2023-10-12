@@ -42,7 +42,7 @@ impl serenity_prelude::EventHandler for Handler {
             // This may seem unintuitive, but it models Discord's behaviour.
             println!(
                 "{} is connected on shard {}/{}!",
-                ready.user.name, shard[0], shard[1],
+                ready.user.name, shard.id, shard.total,
             );
         }
     }
@@ -172,7 +172,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 mute_role(),
                 logs_channel(),
                 set_prefix(),
-                setup(),
+                // setup(),
             ],
             prefix_options: PrefixFrameworkOptions {
                 dynamic_prefix: Some(|ctx| Box::pin(dynamic_prefix(ctx))),
@@ -183,16 +183,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
         })
         .token(&config.token)
         .intents(GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT)
-        .user_data_setup(
+        .setup(
             move |ctx, _ready, framework| {
                 Box::pin(async move { 
                     let commands = &framework.options().commands;
                     let create_commands = poise::builtins::create_application_commands(commands);
-    
-                    serenity_prelude::Command::set_global_application_commands(&ctx.http, |b| {
-                        *b = create_commands;
-                        b
-                    }).await?;
+                    serenity_prelude::Command::set_global_commands(&ctx.http, create_commands).await?;
 
                     /*
                     let guild_id = serenity_prelude::GuildId(1033905219257516032);
@@ -221,8 +217,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                 .expect("Failed to get current moderations!");
                 
                             for entry in entries {
-                                let guild_id = serenity_prelude::GuildId(entry.guild_id as u64);
-                                let user_id = serenity_prelude::UserId(entry.user_id as u64);
+                                let guild_id = serenity_prelude::GuildId::new(entry.guild_id as u64);
+                                let user_id = serenity_prelude::UserId::new(entry.user_id as u64);
                                 let moderation_type: ModerationType = (entry.moderation_type as u8).try_into()
                                     .expect("Failed to convert moderation_type into ModerationType enum!");
                 

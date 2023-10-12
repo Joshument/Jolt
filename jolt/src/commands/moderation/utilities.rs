@@ -1,5 +1,7 @@
 use poise::serenity_prelude;
 use poise::serenity_prelude::CreateEmbed;
+use poise::serenity_prelude::CreateMessage;
+use poise::CreateReply;
 
 use crate::colors;
 use crate::database;
@@ -23,35 +25,45 @@ pub async fn send_moderation_messages(
     reason: Option<&str>,
 ) -> Result<(), crate::error::Error> {
     let dm_success = dm_channel
-        .send_message(&ctx.discord().http, |m| {
-            m.embed(|e| {
-                e.color(dm_color).field(message_header, dm_message, true);
+        .send_message(
+            &ctx.http(),
+            CreateMessage::default().embed({
+                let e =
+                    CreateEmbed::default()
+                        .color(dm_color)
+                        .field(message_header, dm_message, true);
 
-                if let Some(reason) = &reason {
-                    e.field("Reason:", &reason, false);
+                if let Some(reason) = reason {
+                    e.field("Reason:", reason, false)
+                } else {
+                    e
                 }
-
-                e
-            })
-        })
+            }),
+        )
         .await;
 
-    ctx.send(|m| {
-        m.embed(|e| {
-            e.color(color).field(message_header, message, true);
+    ctx.send(CreateReply::default().embed({
+        let e = CreateEmbed::default()
+            .color(color)
+            .field(message_header, message, true);
 
-            if let Some(reason) = reason {
-                e.field("Reason:", &reason, false);
-            }
-
+        if let Some(reason) = reason {
+            e.field("Reason:", reason, false)
+        } else {
             e
-        })
-    })
+        }
+    }))
     .await?;
 
     if let Err(_) = dm_success {
-        ctx.send(|m| m.embed(|e| e.color(dm_fail_color).description(dm_fail_message)))
-            .await?;
+        ctx.send(
+            CreateReply::default().embed(
+                CreateEmbed::default()
+                    .color(dm_fail_color)
+                    .description(dm_fail_message),
+            ),
+        )
+        .await?;
     }
 
     let guild_id = ctx
@@ -61,17 +73,21 @@ pub async fn send_moderation_messages(
 
     if let Some(channel) = logs_channel {
         channel
-            .send_message(&ctx.discord().http, |m| {
-                m.embed(|e| {
-                    e.color(colors::BLUE).title("INFO").description(message);
+            .send_message(
+                &ctx.http(),
+                CreateMessage::default().embed({
+                    let e = CreateEmbed::default()
+                        .color(colors::BLUE)
+                        .title("INFO")
+                        .description(message);
 
-                    if let Some(reason) = &reason {
-                        e.field("Reason:", &reason, false);
+                    if let Some(reason) = reason {
+                        e.field("Reason:", reason, false)
+                    } else {
+                        e
                     }
-
-                    e
-                })
-            })
+                }),
+            )
             .await?;
     }
 
@@ -113,14 +129,14 @@ pub fn is_member_moderator(
         || permissions.manage_roles()
         || permissions.manage_webhooks()
         || permissions.manage_threads()
-        || permissions.moderate_members()) 
+        || permissions.moderate_members())
 }
 
 // Formats a CreateEmbed into a modlog format
-pub fn modlog_embed(embed: &mut CreateEmbed, modlogs: Vec<ModlogEntry>) -> &mut CreateEmbed {
+pub fn modlog_embed(mut embed: CreateEmbed, modlogs: Vec<ModlogEntry>) -> CreateEmbed {
     for modlog in modlogs {
         println!("{:?}\n{}", modlog.expiry_date, modlog.moderation_type);
-        embed.field(
+        embed = embed.field(
             format!("ID {}", modlog.id),
             // The way I omit a certain part of the moderation is to replace the segment with an empty string.
             // This is because of the way that the field works, and since this involves display vs variable

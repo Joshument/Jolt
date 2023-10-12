@@ -77,12 +77,12 @@ impl FromRow<'_, SqliteRow> for ModlogEntry {
         println!("{:?}", temp);
         Ok(Self {
             id: row.try_get::<i64, &str>("id")? as u64,
-            guild_id: GuildId(row.try_get::<i64, &str>("guild_id")? as u64),
+            guild_id: GuildId::new(row.try_get::<i64, &str>("guild_id")? as u64),
             moderation_type: (row.try_get::<i64, &str>("moderation_type")? as u8)
                 .try_into()
                 .unwrap(),
-            user_id: UserId(row.try_get::<i64, &str>("user_id")? as u64),
-            moderator_id: UserId(row.try_get::<i64, &str>("moderator_id")? as u64),
+            user_id: UserId::new(row.try_get::<i64, &str>("user_id")? as u64),
+            moderator_id: UserId::new(row.try_get::<i64, &str>("moderator_id")? as u64),
             administered_at: Timestamp::from_unix_timestamp(row.try_get("administered_at")?)
                 .unwrap(),
             expiry_date: row

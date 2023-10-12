@@ -2,13 +2,30 @@
 
 pub mod error;
 
-use std::time::Duration;
-
-use poise::serenity_prelude::{self, ArgumentConvert};
+use poise::serenity_prelude::{self, CreateEmbed};
+use poise::CreateReply;
 
 use crate::colors;
 use crate::database;
-use crate::messages::send_error;
+
+#[poise::command(
+    prefix_command,
+    slash_command,
+    required_permissions = "MANAGE_GUILD",
+    category = "configuration",
+    rename = "testcommand"
+)]
+pub async fn test_command(ctx: crate::Context<'_>) -> Result<(), crate::DynError> {
+    ctx.send(
+        CreateReply::default().embed(
+            CreateEmbed::default()
+                .color(colors::GREEN)
+                .title("I love buttons!!!"),
+        ),
+    )
+    .await?;
+    Ok(())
+}
 
 /// Set or change the mute role of the server
 #[poise::command(
@@ -30,8 +47,8 @@ pub async fn mute_role(
 
     database::set_mute_role(&database, guild_id, role_id).await?;
 
-    ctx.send(|m| m
-        .embed(|e| e
+    ctx.send(CreateReply::default()
+        .embed( CreateEmbed::default()
             .color(colors::GREEN)
             .description(format!("Role <@&{}> has been assigned as the mute role.", role_id))
             .field(
@@ -74,14 +91,14 @@ pub async fn logs_channel(
 
     database::set_logs_channel(&database, guild_id, channel_id).await?;
 
-    ctx.send(|m| {
-        m.embed(|e| {
-            e.color(colors::GREEN).description(format!(
+    ctx.send(
+        CreateReply::default().embed(CreateEmbed::default().color(colors::GREEN).description(
+            format!(
                 "Channel <#{}> has been assigned as the logs channel.",
                 channel_id
-            ))
-        })
-    })
+            ),
+        )),
+    )
     .await?;
 
     Ok(())
@@ -112,12 +129,13 @@ pub async fn set_prefix(
 
     database::set_prefix(&ctx.data().database, guild_id, &prefix).await?;
 
-    ctx.send(|m| {
-        m.embed(|e| {
-            e.color(colors::GREEN)
-                .description(format!("Changed command prefix to {}.", prefix))
-        })
-    })
+    ctx.send(
+        CreateReply::default().embed(
+            CreateEmbed::default()
+                .color(colors::GREEN)
+                .description(format!("Changed command prefix to {}.", prefix)),
+        ),
+    )
     .await?;
 
     Ok(())
@@ -131,6 +149,7 @@ Example: %setprefix ~
     )
 }
 
+/* No point in remaking all of this just to get rid of it later lol
 /// Set up all configuration options in an interactive fashion.
 /// Ideal for first time setups.
 #[poise::command(
@@ -184,8 +203,8 @@ pub async fn setup(ctx: crate::Context<'_>) -> Result<(), crate::DynError> {
     .await?;
 
     setup_message(
-        &ctx, 
-        "Prefix", 
+        &ctx,
+        "Prefix",
         &format!(
             "What prefix would you like for your server? \
             \nYour prefix determines what will be used for **non-slash commands**. The default prefix is {}.",
@@ -200,8 +219,8 @@ pub async fn setup(ctx: crate::Context<'_>) -> Result<(), crate::DynError> {
         database::set_prefix(&ctx.data().database, guild_id, &prefix).await?;
     }
     setup_message(
-        &ctx, 
-        "Logs Channel", 
+        &ctx,
+        "Logs Channel",
         "What channel would you like to be the logs channel? \n\
         The logs channel is where **moderation actions** will be logged. \
         This can be important when it comes to knowing which actions have been done in your server. \n\
@@ -315,3 +334,4 @@ pub async fn setup(ctx: crate::Context<'_>) -> Result<(), crate::DynError> {
 
     Ok(())
 }
+*/

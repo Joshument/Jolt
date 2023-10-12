@@ -1,6 +1,9 @@
 use crate::colors;
 
-use poise::serenity_prelude;
+use poise::{
+    serenity_prelude::{self, CreateEmbed, CreateEmbedFooter},
+    CreateReply,
+};
 use serenity_prelude::Timestamp;
 
 /// Get the latency of the bot (in milliseconds)
@@ -14,16 +17,15 @@ pub async fn ping(ctx: crate::Context<'_>) -> Result<(), crate::DynError> {
     let response_time_ms =
         Timestamp::now().timestamp_millis() - ctx.created_at().timestamp_millis();
 
-    ctx.send(|m| {
-        m.embed(|e| {
-            e.color(colors::GREEN).field(
+    ctx.send(
+        CreateReply::default()
+            .embed(CreateEmbed::default().color(colors::GREEN).field(
                 "Pong!",
                 format!("Reply time: {}ms", response_time_ms),
                 true,
-            )
-        })
-        .ephemeral(true)
-    })
+            ))
+            .ephemeral(true),
+    )
     .await?;
 
     Ok(())
@@ -43,8 +45,8 @@ fn ping_help() -> String {
 pub async fn info(ctx: crate::Context<'_>) -> Result<(), crate::DynError> {
     let uptime = &ctx.data().uptime.elapsed();
 
-    ctx.send(|m| {
-        m.embed(|e| e
+    ctx.send(CreateReply::default()
+        .embed(CreateEmbed::default()
             .color(colors::BLUE)
             .title("Jolt Bot")
             .fields([
@@ -60,17 +62,17 @@ pub async fn info(ctx: crate::Context<'_>) -> Result<(), crate::DynError> {
                 ),
                 (
                     "Maintainer",
-                    "Joshument#0001",
+                    "Joshument (@imperishablenight on discord)",
                     true
                 ),
                 (
                     "Servers",
-                    &ctx.discord().cache.guild_count().to_string(),
+                    &ctx.cache().guild_count().to_string(),
                     true
                 ),
                 (
                     "Users",
-                    &ctx.discord().cache.user_count().to_string(),
+                    &ctx.cache().user_count().to_string(),
                     true,
                 ),
                 (
@@ -80,18 +82,19 @@ pub async fn info(ctx: crate::Context<'_>) -> Result<(), crate::DynError> {
                 )
             ])
             .description("Jolt is licensed under the [BSD 3-Clause License](https://github.com/Joshument/Jolt/blob/main/LICENSE).")
-            .footer(|f| {
-                f.text(format!(
-                    "Shard {}/{} | Uptime {} | Ping {}ms",
-                    &ctx.discord().shard_id,
-                    &ctx.discord().cache.shard_count(),
-                    humantime::format_duration(*uptime).to_string(),
-                    Timestamp::now().timestamp_millis() - ctx.created_at().timestamp_millis()
-                ))
-            })
+            .footer(CreateEmbedFooter::new(
+                    format!(
+                        "Shard {}/{} | Uptime {} | Ping {}ms",
+                        &ctx.discord().shard_id,
+                        &ctx.cache().shard_count(),
+                        humantime::format_duration(*uptime).to_string(),
+                        Timestamp::now().timestamp_millis() - ctx.created_at().timestamp_millis()
+                    )
+                )
+            )
         )
         .ephemeral(true)
-    }).await?;
+    ).await?;
 
     Ok(())
 }

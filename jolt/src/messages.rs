@@ -1,13 +1,23 @@
 use crate::colors;
 
-use poise::serenity_prelude;
+use poise::{
+    serenity_prelude::{self, CreateEmbed},
+    CreateReply,
+};
 
 pub async fn send_error(
     ctx: &crate::Context<'_>,
     error: &str,
 ) -> Result<(), serenity_prelude::Error> {
-    ctx.send(|m| m.embed(|e| e.color(colors::RED).title("Error!").description(error)))
-        .await?;
+    ctx.send(
+        CreateReply::default().embed(
+            CreateEmbed::default()
+                .color(colors::RED)
+                .title("Error!")
+                .description(error),
+        ),
+    )
+    .await?;
 
     Ok(())
 }
