@@ -1,7 +1,7 @@
 use crate::commands::configuration::error as configuration_error;
 use crate::commands::moderation::error as moderation_error;
 
-pub use configuration_error::SetupError;
+pub use configuration_error::ConfigurationError;
 pub use moderation_error::ModerationError;
 pub use poise::serenity_prelude::prelude::SerenityError;
 pub use poise::FrameworkError;
@@ -29,7 +29,7 @@ pub enum Error {
     SqlxError(#[from] SqlxError),
     /// Errors related to setup related problems.
     #[error(transparent)]
-    SetupError(#[from] SetupError),
+    ConfigurationError(#[from] ConfigurationError),
     /// Errors related to moderation command problems
     #[error(transparent)]
     ModerationError(#[from] ModerationError),

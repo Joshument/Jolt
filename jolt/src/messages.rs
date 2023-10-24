@@ -10,12 +10,14 @@ pub async fn send_error(
     error: &str,
 ) -> Result<(), serenity_prelude::Error> {
     ctx.send(
-        CreateReply::default().embed(
-            CreateEmbed::default()
-                .color(colors::RED)
-                .title("Error!")
-                .description(error),
-        ),
+        CreateReply::default()
+            .embed(
+                CreateEmbed::default()
+                    .color(colors::RED)
+                    .title("Error!")
+                    .description(error),
+            )
+            .ephemeral(true),
     )
     .await?;
 

@@ -1,6 +1,6 @@
-/// Errors related to setup related problems
+/// Errors related to configuration related problems
 #[derive(thiserror::Error, Debug)]
-pub enum SetupError {
+pub enum ConfigurationError {
     /// An error representing a timed out response.
     /// This is used when the bot is expecting a response, but the user does not give one in time.
     ///

@@ -147,7 +147,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     // Used in the info command to get the bot uptime. Declared here so that the timer starts ticking as the bot starts up
     let uptime = Instant::now();
-
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
             commands: vec![
@@ -169,9 +168,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 modlogs(),
 
                 // Configuration
+                test_command(),
                 mute_role(),
                 logs_channel(),
                 set_prefix(),
+                configure(),
                 // setup(),
             ],
             prefix_options: PrefixFrameworkOptions {
@@ -185,7 +186,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .intents(GatewayIntents::non_privileged() | GatewayIntents::MESSAGE_CONTENT)
         .setup(
             move |ctx, _ready, framework| {
-                Box::pin(async move { 
+                Box::pin(async move {
                     let commands = &framework.options().commands;
                     let create_commands = poise::builtins::create_application_commands(commands);
                     serenity_prelude::Command::set_global_commands(&ctx.http, create_commands).await?;
@@ -203,25 +204,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         loop {
                             // If the bot is lagging, try using a longer interval.
                             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                
+
                             // We sort the entires by using the current Unix time, and finding any moderation
                             // that has an expiry date less than the current Unix time (or earlier in time).
                             let current_time = serenity_prelude::Timestamp::now().unix_timestamp();
-                
+
                             let entries = sqlx::query!(
                                 "SELECT guild_id, user_id, moderation_type FROM moderations WHERE expiry_date < ? AND active = TRUE",
                                 current_time
                             )
-                                .fetch_all(&*moderations_database) 
+                                .fetch_all(&*moderations_database)
                                 .await
                                 .expect("Failed to get current moderations!");
-                
+
                             for entry in entries {
                                 let guild_id = serenity_prelude::GuildId::new(entry.guild_id as u64);
                                 let user_id = serenity_prelude::UserId::new(entry.user_id as u64);
                                 let moderation_type: ModerationType = (entry.moderation_type as u8).try_into()
                                     .expect("Failed to convert moderation_type into ModerationType enum!");
-                
+
                                 match moderation_type {
                                     ModerationType::Ban => guild_id.unban(&moderations_ctx.http, user_id).await
                                         .expect(format!("Failed to unban user {} from {}", user_id, guild_id).as_str()),

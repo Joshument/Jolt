@@ -85,7 +85,7 @@ pub async fn info(ctx: crate::Context<'_>) -> Result<(), crate::DynError> {
             .footer(CreateEmbedFooter::new(
                     format!(
                         "Shard {}/{} | Uptime {} | Ping {}ms",
-                        &ctx.discord().shard_id,
+                        &ctx.serenity_context().shard_id,
                         &ctx.cache().shard_count(),
                         humantime::format_duration(*uptime).to_string(),
                         Timestamp::now().timestamp_millis() - ctx.created_at().timestamp_millis()

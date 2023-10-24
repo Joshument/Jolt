@@ -123,12 +123,13 @@ pub async fn delwarn(
     }
     database::clear_single_moderation(&ctx.data().database, id).await?;
 
-    ctx.send(CreateReply::default()
-        .embed(CreateEmbed::default()
-            .color(crate::colors::GREEN)
-            .field("Done!", &format!("Deleted warning **{id}**"), true)
-        )
-    )
+    ctx.send(CreateReply::default().embed(
+        CreateEmbed::default().color(crate::colors::GREEN).field(
+            "Done!",
+            &format!("Deleted warning **{id}**"),
+            true,
+        ),
+    ))
     .await?;
 
     Ok(())
@@ -496,12 +497,14 @@ pub async fn timeout(
     if let Err(e) = &successful_timeout {
         match e {
             SerenityError::Http(_) => {
-                ctx.send(CreateReply::default()
-                    .embed(CreateEmbed::default()
-                        .color(colors::RED)
-                        .description("Timeouts must be shorter than 28 days.")
-                    )
-                    .ephemeral(true)
+                ctx.send(
+                    CreateReply::default()
+                        .embed(
+                            CreateEmbed::default()
+                                .color(colors::RED)
+                                .description("Timeouts must be shorter than 28 days."),
+                        )
+                        .ephemeral(true),
                 )
                 .await?;
             }
@@ -877,8 +880,11 @@ pub async fn modlogs(
 
         e = modlog_embed(e, modlog_page);
 
-        e.footer(CreateEmbedFooter::new(format!("Page {} of {}", page, max_page)))
-            .color(colors::BLUE)
+        e.footer(CreateEmbedFooter::new(format!(
+            "Page {} of {}",
+            page, max_page
+        )))
+        .color(colors::BLUE)
     }))
     .await?;
 

@@ -2,10 +2,21 @@
 
 pub mod error;
 
-use poise::serenity_prelude::{self, CreateEmbed};
-use poise::CreateReply;
+use std::time::Duration;
+
+use poise::futures_util::StreamExt;
+use poise::serenity_prelude::{
+    self, collect, ActionRow, ActionRowComponent, ChannelType, ComponentInteractionDataKind,
+    ComponentType, CreateActionRow, CreateButton, CreateEmbed, CreateInputText,
+    CreateInteractionResponse, CreateInteractionResponseMessage, CreateMessage, CreateModal,
+    CreateSelectMenu, CreateSelectMenuKind, EditMessage, Event, InputTextStyle, Interaction,
+    InteractionCreateEvent,
+};
+use poise::{CreateReply, MessageDispatchTrigger};
+use tokio::select;
 
 use crate::colors;
+use crate::commands::configuration::error::ConfigurationError;
 use crate::database;
 
 #[poise::command(
@@ -16,15 +27,305 @@ use crate::database;
     rename = "testcommand"
 )]
 pub async fn test_command(ctx: crate::Context<'_>) -> Result<(), crate::DynError> {
-    ctx.send(
-        CreateReply::default().embed(
+    let reply = ctx
+        .send(
+            CreateReply::default()
+                .embed(
+                    CreateEmbed::default()
+                        .color(colors::GREEN)
+                        .title("I love buttons!!!"),
+                )
+                .components(vec![CreateActionRow::SelectMenu(CreateSelectMenu::new(
+                    "mute_role_select",
+                    CreateSelectMenuKind::User {
+                        default_users: None,
+                    },
+                ))]),
+        )
+        .await?;
+
+    let message = reply.into_message().await?;
+
+    let interaction = match message
+        .await_component_interaction(&ctx.serenity_context().shard)
+        .timeout(Duration::from_secs(60))
+        .await
+    {
+        Some(x) => Ok(x),
+        None => Err(ConfigurationError::ResponseTimedOut(Duration::from_secs(
+            60,
+        ))),
+    }?;
+
+    let user_id = match &interaction.data.kind {
+        ComponentInteractionDataKind::UserSelect { values } => values[0],
+        _ => panic!("how did this happen"),
+    };
+
+    let member = ctx
+        .guild_id()
+        .expect("Failed to get guild!")
+        .member(ctx, user_id)
+        .await?;
+
+    interaction
+        .create_response(
+            ctx,
+            serenity_prelude::CreateInteractionResponse::UpdateMessage(
+                CreateInteractionResponseMessage::default().embed(
+                    CreateEmbed::default()
+                        .color(colors::BLUE)
+                        .description(format!("FUCK YOU <@{}>", member.user.id)),
+                ),
+            ),
+        )
+        .await?;
+
+    Ok(())
+}
+
+#[poise::command(
+    prefix_command,
+    slash_command,
+    required_permissions = "MANAGE_GUILD",
+    category = "configuration",
+    rename = "configure"
+)]
+pub async fn configure(ctx: crate::Context<'_>) -> Result<(), crate::DynError> {
+    let guild_id = ctx.guild_id().expect("Couldn't get guild id!");
+    let database = ctx.data().database.clone();
+    let user = ctx.author();
+
+    let main_tab = CreateReply::default()
+        .embed(
             CreateEmbed::default()
                 .color(colors::GREEN)
-                .title("I love buttons!!!"),
-        ),
-    )
-    .await?;
-    Ok(())
+                .title("Bot Configuration")
+                .description(
+                    "Please select one of the below buttons to modify the bot's server settings.",
+                ),
+        )
+        .components(vec![CreateActionRow::Buttons(vec![
+            CreateButton::new("prefix_button").label("Prefix"),
+            CreateButton::new("mute_role_button").label("Mute Role"),
+            CreateButton::new("logs_channel_button").label("Logs Channel"),
+            CreateButton::new("exit_button").label("Exit"),
+        ])])
+        .ephemeral(true);
+    let exit = CreateInteractionResponseMessage::default()
+        .embed(
+            CreateEmbed::default()
+                .color(colors::BLUE)
+                .title("Configuration Finished"),
+        )
+        .components(vec![])
+        .ephemeral(true); // components method is necessary to overwrite the pre-existing ones
+    let prefix_input =
+        CreateModal::default().components(vec![CreateActionRow::InputText(CreateInputText::new(
+            InputTextStyle::Short,
+            "Enter new prefix",
+            "prefix_text_input",
+        ))]);
+    let mute_role_input = CreateInteractionResponseMessage::default()
+        .embed(
+            CreateEmbed::default()
+                .color(colors::GREEN)
+                .title("Mute Role")
+                .description(
+                    "Select the role to be assigned on mute. \
+                            `timeout` is typically considered to be a better option, \
+                            but this is kept for compatability if you so desire.",
+                ),
+        )
+        .components(vec![
+            CreateActionRow::SelectMenu(CreateSelectMenu::new(
+                "mute_role_select_input",
+                CreateSelectMenuKind::Role {
+                    default_roles: database::get_mute_role(&database, guild_id)
+                        .await?
+                        .map(|id| vec![id]),
+                },
+            )),
+            CreateActionRow::Buttons(vec![
+                CreateButton::new("back_button").label("Back"),
+                CreateButton::new("exit_button").label("Exit"),
+            ]),
+        ])
+        .ephemeral(true);
+    let logs_channel_input = CreateInteractionResponseMessage::default()
+        .embed(
+            CreateEmbed::default()
+                .color(colors::GREEN)
+                .title("Logs Channel")
+                .description(
+                    "Select the channel to record logs to. \
+                These logs are a collection of moderation actions done in your server.",
+                ),
+        )
+        .components(vec![
+            CreateActionRow::SelectMenu(CreateSelectMenu::new(
+                "logs_channel_select_input",
+                CreateSelectMenuKind::Channel {
+                    channel_types: Some(vec![ChannelType::Text]),
+                    default_channels: database::get_logs_channel(&database, guild_id)
+                        .await?
+                        .map(|id| vec![id]),
+                },
+            )),
+            CreateActionRow::Buttons(vec![
+                CreateButton::new("back_button").label("Back"),
+                CreateButton::new("exit_button").label("Exit"),
+            ]),
+        ])
+        .ephemeral(true);
+
+    let reply = ctx.send(main_tab.clone()).await?;
+    let message = reply.into_message().await?;
+
+    let mut stream = collect(&ctx.serenity_context().shard, |event| match event {
+        Event::InteractionCreate(event) => Some(event.clone()),
+        _ => None,
+    });
+
+    loop {
+        let event = stream.next().await;
+        match event {
+            Some(event) => match &event.interaction {
+                Interaction::Component(interaction) => {
+                    if interaction.user != *user {
+                        continue;
+                        /*
+                        interaction
+                            .create_response(
+                                &ctx,
+                                CreateInteractionResponse::Message(
+                                    CreateInteractionResponseMessage::default().embed(
+                                        CreateEmbed::default()
+                                            .title("This isn't your command!")
+                                            .color(colors::RED),
+                                    ),
+                                ),
+                            )
+                            .await?
+                        */
+                    };
+                    match &interaction.data.kind {
+                        ComponentInteractionDataKind::Button => {
+                            match interaction.data.custom_id.as_str() {
+                                "exit_button" => {
+                                    interaction
+                                        .create_response(
+                                            &ctx,
+                                            CreateInteractionResponse::UpdateMessage(exit.clone()),
+                                        )
+                                        .await?
+                                }
+                                "back_button" => {
+                                    interaction
+                                        .create_response(
+                                            &ctx,
+                                            CreateInteractionResponse::UpdateMessage(
+                                                main_tab.clone().to_slash_initial_response(),
+                                            ),
+                                        )
+                                        .await?
+                                }
+                                "prefix_button" => {
+                                    interaction
+                                        .create_response(
+                                            &ctx,
+                                            CreateInteractionResponse::Modal(prefix_input.clone()),
+                                        )
+                                        .await?
+                                }
+
+                                "mute_role_button" => {
+                                    interaction
+                                        .create_response(
+                                            &ctx,
+                                            CreateInteractionResponse::UpdateMessage(
+                                                mute_role_input.clone(),
+                                            ),
+                                        )
+                                        .await?
+                                }
+                                "logs_channel_button" => {
+                                    interaction
+                                        .create_response(
+                                            &ctx,
+                                            CreateInteractionResponse::UpdateMessage(
+                                                logs_channel_input.clone(),
+                                            ),
+                                        )
+                                        .await?
+                                }
+                                _ => panic!("button not expected or unimplemented!"),
+                            }
+                        }
+                        ComponentInteractionDataKind::RoleSelect { values } => {
+                            match interaction.data.custom_id.as_str() {
+                                "mute_role_select_input" => {
+                                    let role_id = values[0];
+                                    database::set_mute_role(&database, guild_id, role_id).await?;
+                                    interaction
+                                        .create_response(
+                                            &ctx.http(),
+                                            CreateInteractionResponse::UpdateMessage(
+                                                main_tab.clone().to_slash_initial_response(),
+                                            ),
+                                        )
+                                        .await?
+                                }
+                                _ => (),
+                            }
+                        }
+                        ComponentInteractionDataKind::ChannelSelect { values } => {
+                            match interaction.data.custom_id.as_str() {
+                                "logs_channel_select_input" => {
+                                    let channel_id = values[0];
+                                    database::set_logs_channel(&database, guild_id, channel_id)
+                                        .await?;
+                                    interaction
+                                        .create_response(
+                                            &ctx.http(),
+                                            CreateInteractionResponse::UpdateMessage(
+                                                main_tab.clone().to_slash_initial_response(),
+                                            ),
+                                        )
+                                        .await?
+                                }
+                                _ => (),
+                            }
+                        }
+                        _ => (),
+                    }
+                }
+                Interaction::Modal(interaction) => {
+                    for action_row in &interaction.data.components {
+                        for component in &action_row.components {
+                            match component {
+                                ActionRowComponent::InputText(input) => match &input.value {
+                                    Some(value) => {
+                                        database::set_prefix(&database, guild_id, &value).await?;
+                                        interaction
+                                            .create_response(
+                                                &ctx.http(),
+                                                CreateInteractionResponse::Acknowledge,
+                                            )
+                                            .await?
+                                    }
+                                    None => (),
+                                },
+                                _ => (),
+                            }
+                        }
+                    }
+                }
+                _ => (),
+            },
+            None => (),
+        }
+    }
 }
 
 /// Set or change the mute role of the server
